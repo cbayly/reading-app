@@ -1,9 +1,9 @@
 import express from "express";
 import cors from "cors";
-import { PrismaClient } from "@prisma/client";
+// import { PrismaClient } from "@prisma/client";
 
 const app = express();
-const prisma = new PrismaClient();
+// const prisma = new PrismaClient();
 
 app.use(cors());
 app.use(express.json());
@@ -30,53 +30,26 @@ app.get("/", (req, res) => {
 });
 
 // Students route
-app.get("/api/students", async (req, res) => {
+app.get("/api/students", (req, res) => {
   console.log("✅ GET /api/students called");
-  try {
-    const students = await prisma.student.findMany({
-      orderBy: { createdAt: 'asc' }
-    });
-    
-    // If no students exist, return default ones
-    if (students.length === 0) {
-      return res.json([
-        { id: 1, name: "Lenae" },
-        { id: 2, name: "Shepard" }
-      ]);
-    }
-    
-    res.json(students);
-  } catch (err) {
-    console.error("❌ Error fetching students:", err);
-    // Fallback to hardcoded data if database fails
-    res.json([
-      { id: 1, name: "Lenae" },
-      { id: 2, name: "Shepard" }
-    ]);
-  }
+  // Return hardcoded students for now (database will be added later)
+  res.json([
+    { id: 1, name: "Lenae" },
+    { id: 2, name: "Shepard" }
+  ]);
 });
 
-// Add a student (bonus endpoint)
-app.post("/api/students", async (req, res) => {
+// Add a student (bonus endpoint) - simplified for now
+app.post("/api/students", (req, res) => {
   const { name } = req.body;
   console.log(`✅ POST /api/students called with name: ${name}`);
   
-  try {
-    const student = await prisma.student.create({
-      data: { name }
-    });
-    res.status(201).json(student);
-  } catch (err) {
-    console.error("❌ Error creating student:", err);
-    res.status(500).json({ error: "Failed to create student" });
-  }
-});
-
-// Graceful shutdown
-process.on('SIGINT', async () => {
-  console.log('👋 Disconnecting from database...');
-  await prisma.$disconnect();
-  process.exit(0);
+  // For now, just return success (database will be added later)
+  res.status(201).json({ 
+    id: Date.now(), 
+    name: name || "New Student",
+    message: "Database integration coming soon!" 
+  });
 });
 
 const PORT = process.env.PORT || 5050;
