@@ -36,7 +36,7 @@ export default function Home() {
   const { theme, toggleTheme, mounted } = useTheme();
 
   useEffect(() => {
-    fetch("http://localhost:5050/api/students")
+    fetch("https://reading-app-production.up.railway.app/api/students")
       .then((res) => res.json())
       .then((data) => setStudents(data))
       .catch((err) => console.error("Error fetching students:", err));
