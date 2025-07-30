@@ -1,4 +1,4 @@
-import { StudentForm } from '../../components/forms/StudentForm';
+import { StudentForm } from '@/components/forms/StudentForm';
 
 export default function SetupPage() {
   return (

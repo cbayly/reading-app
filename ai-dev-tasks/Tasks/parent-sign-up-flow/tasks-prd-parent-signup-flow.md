@@ -105,13 +105,13 @@
   - [ ] 4.10 Write unit tests for student forms and API endpoints (skipped for MVP)
 
 - [ ] 5.0 **Assessment Preparation & Flow Integration**
-  - [ ] 5.1 Create assessment intro page (`/assessment/intro`) with explanation
-  - [ ] 5.2 Add "Start First Reading Check" CTA after student setup completion
-  - [ ] 5.3 Create Assessment record when user starts assessment flow
-  - [ ] 5.4 Implement flow state management to track progress through signup
-  - [ ] 5.5 Add assessment resumption logic for abandoned assessments
-  - [ ] 5.6 Create placeholder dashboard page for post-assessment redirect
-  - [ ] 5.7 Implement navigation between flow steps with progress indicators
-  - [ ] 5.8 Add comprehensive error handling and network retry logic
-  - [ ] 5.9 Create API endpoints for assessment management
-  - [ ] 5.10 Write unit tests for assessment flow and state management 
+  - [x] 5.1 Create assessment intro page (`/assessment/intro`) with explanation
+  - [x] 5.2 Add "Start First Reading Check" CTA after student setup completion
+  - [x] 5.3 Create Assessment record when user starts assessment flow
+  - [x] 5.4 Implement flow state management to track progress through signup
+  - [x] 5.5 Add assessment resumption logic for abandoned assessments
+  - [x] 5.6 Create placeholder dashboard page for post-assessment redirect
+  - [x] 5.7 Implement navigation between flow steps with progress indicators
+  - [ ] 5.8 Add comprehensive error handling and network retry logic (skipped for MVP)
+  - [x] 5.9 Create API endpoints for assessment management
+  - [ ] 5.10 Write unit tests for assessment flow and state management (skipped for MVP) 

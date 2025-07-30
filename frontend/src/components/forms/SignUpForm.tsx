@@ -1,10 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuthContext } from '../../app/contexts/AuthContext';
-import { Button } from '../ui/Button';
-import { FormInput } from '../ui/FormInput';
+import { useAuthContext } from '@/app/contexts/AuthContext';
+import { useFlowContext } from '@/app/contexts/FlowContext';
+import { Button } from '@/components/ui/Button';
+import { FormInput } from '@/components/ui/FormInput';
 
 export function SignUpForm() {
   const [name, setName] = useState('');
@@ -12,14 +12,14 @@ export function SignUpForm() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const { signUp } = useAuthContext();
-  const router = useRouter();
+  const { navigateTo } = useFlowContext();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     try {
       await signUp(name, email, password);
-      router.push('/dashboard');
+      navigateTo('setup');
     } catch (err: any) {
       setError(err.response?.data?.message || 'An error occurred during sign up.');
     }
