@@ -1,8 +1,8 @@
 'use client';
 
 import React, { createContext, useContext } from 'react';
-import { useAuth as useAuthHook } from '../../../lib/auth';
-import { Parent } from '../../../types/auth';
+import { useAuth as useAuthHook } from '@/lib/auth';
+import { Parent } from '@/types/auth';
 
 interface AuthContextType {
   user: Parent | null;

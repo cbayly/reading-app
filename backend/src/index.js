@@ -3,6 +3,7 @@ import cors from "cors";
 import { PrismaClient } from "@prisma/client";
 import authRoutes from './routes/auth.js';
 import studentRoutes from './routes/students.js';
+import assessmentRoutes from './routes/assessments.js';
 import { authenticate } from './middleware/auth.js';
 
 const app = express();
@@ -21,6 +22,7 @@ app.use('/api/auth', authRoutes);
 
 // Protected routes
 app.use('/api/students', authenticate, studentRoutes);
+app.use('/api/assessments', authenticate, assessmentRoutes);
 
 const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => {

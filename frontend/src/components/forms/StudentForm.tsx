@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { Button } from '../ui/Button';
-import { FormInput } from '../ui/FormInput';
+import { useFlowContext } from '@/app/contexts/FlowContext';
+import { Button } from '@/components/ui/Button';
+import { FormInput } from '@/components/ui/FormInput';
 
 interface StudentData {
   name: string;
@@ -22,7 +22,7 @@ export function StudentForm() {
     interests: '',
   });
   const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
+  const { navigateTo } = useFlowContext();
 
   // Calculate grade level based on birthday
   const calculateGradeLevel = (birthday: string): number => {
@@ -86,7 +86,7 @@ export function StudentForm() {
   };
 
   const completeSetup = () => {
-    router.push('/assessment/intro');
+    navigateTo('assessment_intro');
   };
 
   const nextStep = () => setStep(step + 1);
