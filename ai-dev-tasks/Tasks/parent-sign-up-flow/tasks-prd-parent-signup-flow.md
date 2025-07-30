@@ -80,7 +80,7 @@
   - [x] 2.7 Write unit tests for authentication utilities
   - [x] 2.8 Set up cookie-based session management
 
-- [ ] 3.0 **Landing Page & Authentication UI**
+- [x] 3.0 **Landing Page & Authentication UI**
   - [x] 3.1 Create reusable UI components (Button, FormInput) with TypeScript types
   - [x] 3.2 Transform current page.tsx into proper landing page with value proposition
   - [x] 3.3 Add "Sign Up" and "Log In" CTAs to landing page
@@ -93,16 +93,16 @@
   - [ ] 3.10 Write unit tests for authentication forms and components (skipped for MVP)
 
 - [ ] 4.0 **Student Setup Flow & Forms**
-  - [ ] 4.1 Create student setup page (`/setup`) with progressive disclosure
-  - [ ] 4.2 Build StudentForm component with required fields (name, birthday, grade, interests)
-  - [ ] 4.3 Implement grade level dropdown (1-12 as updated in PRD)
-  - [ ] 4.4 Create interests input with AI-generated suggestions (OpenAI integration)
-  - [ ] 4.5 Add "Add Another Child" functionality for multiple students
-  - [ ] 4.6 Implement form validation and error handling
-  - [ ] 4.7 Create API endpoints for student creation and management
-  - [ ] 4.8 Add auto-grade population based on birthday with manual override
-  - [ ] 4.9 Implement route protection (block dashboard access until student added)
-  - [ ] 4.10 Write unit tests for student forms and API endpoints
+  - [x] 4.1 Create student setup page (`/setup`) with progressive disclosure
+  - [x] 4.2 Build StudentForm component with required fields (name, birthday, grade, interests)
+  - [x] 4.3 Implement grade level dropdown (1-12 as updated in PRD)
+  - [x] 4.4 Create interests input with AI-generated suggestions (OpenAI integration)
+  - [x] 4.5 Add "Add Another Child" functionality for multiple students
+  - [x] 4.6 Implement form validation and error handling
+  - [x] 4.7 Create API endpoints for student creation and management
+  - [x] 4.8 Add auto-grade population based on birthday with manual override
+  - [x] 4.9 Implement route protection (block dashboard access until student added)
+  - [ ] 4.10 Write unit tests for student forms and API endpoints (skipped for MVP)
 
 - [ ] 5.0 **Assessment Preparation & Flow Integration**
   - [ ] 5.1 Create assessment intro page (`/assessment/intro`) with explanation
