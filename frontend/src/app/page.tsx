@@ -1,119 +1,59 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-
-// Hook to handle hydration-safe theme
-function useTheme() {
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-    
-    // Get saved theme or system preference
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme === 'dark' || savedTheme === 'light') {
-      setTheme(savedTheme);
-    } else {
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      setTheme(prefersDark ? 'dark' : 'light');
-    }
-  }, []);
-
-  const toggleTheme = () => {
-    const newTheme = theme === 'light' ? 'dark' : 'light';
-    setTheme(newTheme);
-    if (mounted) {
-      localStorage.setItem('theme', newTheme);
-    }
-  };
-
-  return { theme, toggleTheme, mounted };
-}
+import Link from 'next/link';
+import { Button } from '../components/ui/Button';
 
 export default function Home() {
-  const [students, setStudents] = useState<{ id: number; name: string }[]>([]);
-  const { theme, toggleTheme, mounted } = useTheme();
-
-  useEffect(() => {
-    fetch("https://reading-app-production.up.railway.app/api/students")
-      .then((res) => res.json())
-      .then((data) => setStudents(data))
-      .catch((err) => console.error("Error fetching students:", err));
-  }, []);
-
-  // Render loading state until mounted to prevent hydration mismatch
-  if (!mounted) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 text-gray-900 p-6">
-        <div className="flex items-center space-x-2">
-          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-        </div>
-      </div>
-    );
-  }
-
-  const isDark = theme === 'dark';
-
   return (
-    <div className={`min-h-screen flex flex-col items-center justify-center p-6 transition-colors duration-300 ${
-      isDark 
-        ? 'bg-gray-900 text-gray-100' 
-        : 'bg-gray-50 text-gray-900'
-    }`}>
-      {/* Dark Mode Toggle */}
-      <button
-        onClick={toggleTheme}
-        className={`absolute top-6 right-6 px-4 py-2 rounded-lg shadow-md transition ${
-          isDark
-            ? 'bg-gray-700 text-gray-200 hover:bg-gray-600'
-            : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
-        }`}
-      >
-        {isDark ? "☀️ Light Mode" : "🌙 Dark Mode"}
-      </button>
-
+    <div className="min-h-screen bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100">
       {/* Header */}
-      <h1 className="text-4xl font-bold mb-8">Student Portal</h1>
+      <header className="p-4 flex justify-between items-center">
+        <h1 className="text-2xl font-bold">Reading App</h1>
+        <div>
+          <Link href="/login" className="mr-4">
+            <Button variant="secondary">Log In</Button>
+          </Link>
+          <Link href="/signup">
+            <Button>Sign Up</Button>
+          </Link>
+        </div>
+      </header>
 
-      {/* Student List Card */}
-      <div className={`rounded-xl shadow-lg p-8 w-full max-w-md ${
-        isDark ? 'bg-gray-800' : 'bg-white'
-      }`}>
-        <h2 className="text-2xl font-semibold mb-6 text-center">
-          Student List
-        </h2>
-        <ul className="space-y-3">
-          {students.length > 0 ? (
-            students.map((student) => (
-              <li
-                key={student.id}
-                className={`p-3 rounded-md transition ${
-                  isDark
-                    ? 'bg-gray-700 hover:bg-gray-600'
-                    : 'bg-gray-100 hover:bg-gray-200'
-                }`}
-              >
-                {student.name}
-              </li>
-            ))
-          ) : (
-            <p className={`text-sm text-center ${
-              isDark ? 'text-gray-400' : 'text-gray-500'
-            }`}>
-              Loading students...
-            </p>
-          )}
-        </ul>
-      </div>
+      {/* Hero Section */}
+      <main className="flex flex-col items-center justify-center text-center p-24">
+        <h2 className="text-5xl font-bold mb-4">Unlock Your Child's Reading Potential</h2>
+        <p className="text-xl text-gray-600 dark:text-gray-400 mb-8 max-w-2xl">
+          Track progress, discover new books, and make reading fun with our personalized assessments and engaging activities.
+        </p>
+        <Link href="/signup">
+          <Button className="text-lg px-8 py-4">Get Started for Free</Button>
+        </Link>
+      </main>
+
+      {/* Features Section */}
+      <section className="py-20 bg-white dark:bg-gray-800">
+        <div className="container mx-auto px-6">
+          <h3 className="text-4xl font-bold text-center mb-12">Why Parents Love Reading App</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="text-center p-6 border border-gray-200 dark:border-gray-700 rounded-lg">
+              <h4 className="text-2xl font-bold mb-2">Track Progress</h4>
+              <p>See your child's words per minute, reading accuracy, and comprehension improve over time.</p>
+            </div>
+            <div className="text-center p-6 border border-gray-200 dark:border-gray-700 rounded-lg">
+              <h4 className="text-2xl font-bold mb-2">Personalized Assessments</h4>
+              <p>AI-generated passages based on your child's interests and reading level.</p>
+            </div>
+            <div className="text-center p-6 border border-gray-200 dark:border-gray-700 rounded-lg">
+              <h4 className="text-2xl font-bold mb-2">Engaging Activities</h4>
+              <p>Keep your child motivated with fun reading exercises and rewards.</p>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* Footer */}
-      <footer className={`mt-12 text-sm ${
-        isDark ? 'text-gray-400' : 'text-gray-500'
-      }`}>
-        Powered by Next.js + Tailwind CSS
+      <footer className="p-4 text-center text-gray-500">
+        © {new Date().getFullYear()} Reading App. All rights reserved.
       </footer>
     </div>
   );

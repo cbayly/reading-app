@@ -81,16 +81,16 @@
   - [x] 2.8 Set up cookie-based session management
 
 - [ ] 3.0 **Landing Page & Authentication UI**
-  - [ ] 3.1 Create reusable UI components (Button, FormInput) with TypeScript types
-  - [ ] 3.2 Transform current page.tsx into proper landing page with value proposition
-  - [ ] 3.3 Add "Sign Up" and "Log In" CTAs to landing page
-  - [ ] 3.4 Create signup page (`/signup`) with parent registration form
-  - [ ] 3.5 Create login page (`/login`) with authentication form
-  - [ ] 3.6 Implement form validation (email uniqueness, password requirements)
-  - [ ] 3.7 Add error handling and user feedback for authentication
-  - [ ] 3.8 Create AuthLayout component for consistent styling
-  - [ ] 3.9 Add "Forgot Password" functionality with email reset
-  - [ ] 3.10 Write unit tests for authentication forms and components
+  - [x] 3.1 Create reusable UI components (Button, FormInput) with TypeScript types
+  - [x] 3.2 Transform current page.tsx into proper landing page with value proposition
+  - [x] 3.3 Add "Sign Up" and "Log In" CTAs to landing page
+  - [x] 3.4 Create signup page (`/signup`) with parent registration form
+  - [x] 3.5 Create login page (`/login`) with authentication form
+  - [x] 3.6 Implement form validation (email uniqueness, password requirements)
+  - [x] 3.7 Add error handling and user feedback for authentication
+  - [x] 3.8 Create AuthLayout component for consistent styling
+  - [ ] 3.9 Add "Forgot Password" functionality with email reset (skipped for MVP)
+  - [ ] 3.10 Write unit tests for authentication forms and components (skipped for MVP)
 
 - [ ] 4.0 **Student Setup Flow & Forms**
   - [ ] 4.1 Create student setup page (`/setup`) with progressive disclosure
