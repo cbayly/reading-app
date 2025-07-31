@@ -1,0 +1,41 @@
+/* Print styles */
+@media print {
+  /* Hide non-printable elements */
+  .no-print {
+    display: none !important;
+  }
+
+  /* Reset background colors and borders */
+  .print-content {
+    background: white !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Style the passage for print */
+  .print-passage {
+    font-size: 14pt !important;
+    line-height: 1.6 !important;
+    color: black !important;
+  }
+
+  /* Style the header for print */
+  .print-header {
+    font-size: 18pt !important;
+    margin-bottom: 1em !important;
+    color: black !important;
+  }
+
+  /* Reset word highlighting for print */
+  .print-word {
+    background: none !important;
+    color: black !important;
+    cursor: default !important;
+  }
+
+  /* Add page margins */
+  @page {
+    margin: 2cm;
+  }
+}

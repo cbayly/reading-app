@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import '@/styles/print.css';
 
 interface PassageReaderProps {
   passage: string;
@@ -112,7 +113,7 @@ export default function PassageReader({ passage, studentName, onComplete }: Pass
       {/* Instructions and Controls Row */}
       <div className="flex gap-6">
         {/* Instructions - 2/3 width */}
-        <div className="flex-1 bg-blue-50 border border-blue-200 rounded-lg p-4" style={{ flexBasis: '66.666%' }}>
+        <div className="flex-1 bg-blue-50 border border-blue-200 rounded-lg p-4 no-print" style={{ flexBasis: '66.666%' }}>
           <h3 className="font-semibold text-blue-900 mb-2">Instructions for Parents:</h3>
           <ul className="text-blue-800 space-y-1 text-sm">
             <li>• Click "Start Reading" to begin the timer</li>
@@ -125,7 +126,7 @@ export default function PassageReader({ passage, studentName, onComplete }: Pass
         </div>
 
         {/* Controls Panel - 1/3 width */}
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 flex flex-col items-center justify-center space-y-4" style={{ flexBasis: '33.333%' }}>
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 flex flex-col items-center justify-center space-y-4 no-print" style={{ flexBasis: '33.333%' }}>
           {/* Timer */}
           <div className="text-center">
             <div className="text-sm text-gray-500">Reading Time</div>
@@ -156,18 +157,21 @@ export default function PassageReader({ passage, studentName, onComplete }: Pass
               </button>
             )}
           </div>
+
+
         </div>
       </div>
 
       {/* Passage Display */}
-      <div className="bg-gray-50 rounded-lg p-6">
-        <div className="text-lg leading-relaxed text-gray-900 max-w-3xl mx-auto">
+      <div className="bg-gray-50 rounded-lg p-6 print-content">
+        <div className="text-lg leading-relaxed text-gray-900 max-w-3xl mx-auto print-passage">
+          <h1 className="text-2xl font-bold mb-6 print-header">Reading Assessment</h1>
           {renderPassage()}
         </div>
       </div>
 
       {/* Error Count */}
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4 no-print">
         <div className="flex justify-between items-center">
           <span className="text-red-800 font-medium">Words Marked as Incorrect:</span>
           <span className="text-red-800 font-bold text-xl">{incorrectWords.size}</span>
@@ -175,7 +179,7 @@ export default function PassageReader({ passage, studentName, onComplete }: Pass
       </div>
 
       {/* Done Button */}
-      <div className="text-center">
+      <div className="text-center no-print">
         <button
           onClick={handleComplete}
           disabled={!hasStarted}
