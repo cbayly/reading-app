@@ -1,27 +1,30 @@
 'use client';
 
 import { useState } from 'react';
-import { useAuthContext } from '@/app/contexts/AuthContext';
-import { useFlowContext } from '@/app/contexts/FlowContext';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/Button';
 import { FormInput } from '@/components/ui/FormInput';
-import Link from 'next/link';
 
 export function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const { login } = useAuthContext();
-  const { navigateTo } = useFlowContext();
+  const { login } = useAuth();
+  const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     try {
       await login(email, password);
-      // The FlowContext will handle redirection logic
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'An error occurred during login.');
+      router.push('/dashboard');
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('An unknown error occurred');
+      }
     }
   };
 

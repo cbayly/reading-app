@@ -90,7 +90,7 @@
   - [x] 3.7 Add error handling and user feedback for authentication
   - [x] 3.8 Create AuthLayout component for consistent styling
   - [ ] 3.9 Add "Forgot Password" functionality with email reset (skipped for MVP)
-  - [ ] 3.10 Write unit tests for authentication forms and components (skipped for MVP)
+  - [x] 3.10 Write unit tests for authentication forms and components
 
 - [ ] 4.0 **Student Setup Flow & Forms**
   - [x] 4.1 Create student setup page (`/setup`) with progressive disclosure
@@ -104,7 +104,7 @@
   - [x] 4.9 Implement route protection (block dashboard access until student added)
   - [ ] 4.10 Write unit tests for student forms and API endpoints (skipped for MVP)
 
-- [ ] 5.0 **Assessment Preparation & Flow Integration**
+- [x] 5.0 **Assessment Preparation & Flow Integration**
   - [x] 5.1 Create assessment intro page (`/assessment/intro`) with explanation
   - [x] 5.2 Add "Start First Reading Check" CTA after student setup completion
   - [x] 5.3 Create Assessment record when user starts assessment flow

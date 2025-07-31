@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Cookies from 'js-cookie';
 import jwt from 'jsonwebtoken';
 import api from './api';
@@ -16,21 +17,16 @@ export async function login(email: string, password: string): Promise<Parent> {
   return response.data.parent;
 }
 
-export function logout() {
-  Cookies.remove('token');
-}
-
 export function useAuth() {
   const [user, setUser] = useState<Parent | null>(null);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
   useEffect(() => {
     const token = Cookies.get('token');
     if (token) {
       try {
         const decoded = jwt.decode(token) as { id: number; email: string; name: string; };
-        // This is a basic client-side decode. The server will still verify the token on every request.
-        // For more complex scenarios, you might want to fetch user data from a /me endpoint.
         setUser({ id: decoded.id, email: decoded.email, name: decoded.name });
       } catch (error) {
         console.error('Failed to decode token:', error);
@@ -39,6 +35,12 @@ export function useAuth() {
     }
     setLoading(false);
   }, []);
+  
+  const logout = () => {
+    Cookies.remove('token');
+    setUser(null);
+    router.push('/login');
+  };
 
   return { user, loading, login, signUp, logout };
-} 
+}

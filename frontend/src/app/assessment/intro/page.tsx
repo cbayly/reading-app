@@ -1,15 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { createAssessment } from '@/lib/api';
+import { Assessment } from '@/types/assessment';
 
 export default function AssessmentIntroPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [resumedAssessment, setResumedAssessment] = useState<any>(null);
+  const [resumedAssessment, setResumedAssessment] = useState<Assessment | null>(null);
   const router = useRouter();
 
   const handleStartAssessment = async () => {
@@ -28,8 +28,12 @@ export default function AssessmentIntroPage() {
         // Redirect to the assessment start page
         router.push('/assessment/start');
       }
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to start assessment');
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('An unknown error occurred');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -70,10 +74,10 @@ export default function AssessmentIntroPage() {
           <>
             <div className="text-center mb-12">
               <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">
-                Ready for Your Child's Reading Assessment?
+                Ready for Your Child&apos;s Reading Assessment?
               </h1>
               <p className="text-xl text-gray-600 dark:text-gray-400">
-                Let's discover your child's reading level and create a personalized learning plan.
+                Let&apos;s discover your child&apos;s reading level and create a personalized learning plan.
               </p>
             </div>
 
@@ -99,7 +103,7 @@ export default function AssessmentIntroPage() {
                   </div>
                   <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Timed Reading</h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                    We'll measure reading speed and accuracy to understand their current level.
+                    We&apos;ll measure reading speed and accuracy to understand their current level.
                   </p>
                 </div>
                 
@@ -109,7 +113,7 @@ export default function AssessmentIntroPage() {
                   </div>
                   <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Detailed Results</h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Get comprehensive insights into your child's reading strengths and areas for growth.
+                    Get comprehensive insights into your child&apos;s reading strengths and areas for growth.
                   </p>
                 </div>
               </div>
@@ -120,7 +124,7 @@ export default function AssessmentIntroPage() {
                 </h3>
                 <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
                   <li>• Find a quiet, comfortable space for your child</li>
-                  <li>• Make sure they're well-rested and relaxed</li>
+                  <li>• Make sure they&apos;re well-rested and relaxed</li>
                   <li>• Encourage them to read naturally, as they normally would</li>
                   <li>• The assessment takes about 5-10 minutes to complete</li>
                 </ul>
@@ -137,7 +141,7 @@ export default function AssessmentIntroPage() {
                 {isLoading ? 'Starting...' : 'Start Reading Assessment'}
               </Button>
               <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
-                You can always come back to this later if you're not ready right now.
+                You can always come back to this later if you&apos;re not ready right now.
               </p>
             </div>
           </>
@@ -145,4 +149,4 @@ export default function AssessmentIntroPage() {
       </div>
     </div>
   );
-} 
+}

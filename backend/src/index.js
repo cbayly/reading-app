@@ -1,15 +1,25 @@
 import express from "express";
 import cors from "cors";
 import { PrismaClient } from "@prisma/client";
-import authRoutes from './routes/auth.js';
-import studentRoutes from './routes/students.js';
-import assessmentRoutes from './routes/assessments.js';
-import { authenticate } from './middleware/auth.js';
+import authRoutes from '../routes/auth.js';
+import studentRoutes from '../routes/students.js';
+import assessmentRoutes from '../routes/assessments.js';
+import { authenticate } from '../middleware/auth.js';
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+});
 
 const app = express();
 const prisma = new PrismaClient();
 
-app.use(cors());
+app.use(cors({
+  origin: ['http://localhost:3000', 'http://localhost:3001'],
+}));
 app.use(express.json());
 
 app.get("/", (req, res) => {
