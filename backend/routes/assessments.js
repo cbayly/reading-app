@@ -200,10 +200,10 @@ router.put('/:id/submit', authenticate, async (req, res) => {
     // Calculate words per minute (WPM)
     const wordCount = assessment.passage.split(/\s+/).length;
     const minutes = readingTime / 60;
-    const wpm = Math.round((wordCount / minutes) * 10) / 10; // Round to 1 decimal place
+    const wpm = minutes > 0 ? Math.round(wordCount / minutes) : 0;
 
-    // Calculate reading accuracy
-    const accuracy = Math.round(((wordCount - errorCount) / wordCount) * 1000) / 1000; // Round to 3 decimal places
+    // Calculate reading accuracy as a percentage
+    const accuracy = wordCount > 0 ? Math.round(((wordCount - errorCount) / wordCount) * 100) : 0;
 
     // Calculate comprehension score (percentage of correct answers)
     const questions = assessment.questions;
@@ -213,17 +213,10 @@ router.put('/:id/submit', authenticate, async (req, res) => {
         correctAnswers++;
       }
     });
-    const comprehensionScore = correctAnswers / questions.length;
+    const comprehensionScore = Math.round((correctAnswers / questions.length) * 100);
 
-    // Calculate composite score (weighted average)
-    // 40% WPM, 30% Accuracy, 30% Comprehension
-    const compositeScore = Math.round(
-      (
-        (wpm / 200) * 0.4 + // Normalize WPM to ~1 by dividing by target WPM for grade level
-        accuracy * 0.3 +
-        comprehensionScore * 0.3
-      ) * 100
-    ) / 100;
+    // Calculate composite score (simple average of accuracy and comprehension)
+    const compositeScore = Math.round((accuracy + comprehensionScore) / 2);
 
     const updatedAssessment = await prisma.assessment.update({
       where: { id: parseInt(id) },

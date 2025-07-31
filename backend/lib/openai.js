@@ -36,7 +36,7 @@ function constructPrompt(student) {
           "type": "comprehension" or "vocabulary",
           "question": "The full question text...",
           "options": ["Option A", "Option B", "Option C", "Option D"],
-          "correctAnswer": "The correct option text"
+          "correctAnswer": "A"
         }
       ]
     }

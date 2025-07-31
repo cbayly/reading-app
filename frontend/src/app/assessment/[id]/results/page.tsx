@@ -13,9 +13,9 @@ interface Question {
 }
 
 function getGradeEquivalent(compositeScore: number): string {
-  if (compositeScore >= 0.9) return 'Above Grade Level';
-  if (compositeScore >= 0.7) return 'At Grade Level';
-  if (compositeScore >= 0.5) return 'Approaching Grade Level';
+  if (compositeScore >= 90) return 'Above Grade Level';
+  if (compositeScore >= 70) return 'At Grade Level';
+  if (compositeScore >= 50) return 'Approaching Grade Level';
   return 'Below Grade Level';
 }
 
@@ -31,16 +31,16 @@ function getStrengthsAndWeaknesses(wpm: number, accuracy: number, comprehensionS
   }
 
   // Accuracy Analysis
-  if (accuracy >= 0.95) {
+  if (accuracy >= 95) {
     strengths.push('High reading accuracy');
-  } else if (accuracy < 0.9) {
+  } else if (accuracy < 90) {
     weaknesses.push('Focus on reading accuracy');
   }
 
   // Comprehension Analysis
-  if (comprehensionScore >= 0.75) {
+  if (comprehensionScore >= 75) {
     strengths.push('Strong reading comprehension');
-  } else if (comprehensionScore < 0.6) {
+  } else if (comprehensionScore < 60) {
     weaknesses.push('Work on understanding what you read');
   }
 
@@ -157,12 +157,6 @@ export default function AssessmentResultsPage() {
                 Here&apos;s how {assessment.student?.name} did on their assessment
               </p>
             </div>
-            <button
-              onClick={handlePrint}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              Print Results
-            </button>
           </div>
         </div>
       </div>
@@ -186,20 +180,16 @@ export default function AssessmentResultsPage() {
           {/* Detailed Metrics */}
           <div className="grid grid-cols-3 gap-6 mb-12">
             <div className="bg-gray-50 rounded-lg p-4 text-center">
-              <div className="text-2xl font-bold text-gray-900 mb-1">
-                {assessment.wpm}
-              </div>
+              <div className="text-2xl font-bold text-gray-900 mb-1">{assessment.wpm}</div>
               <div className="text-sm text-gray-600">Words per Minute</div>
             </div>
             <div className="bg-gray-50 rounded-lg p-4 text-center">
-              <div className="text-2xl font-bold text-gray-900 mb-1">
-                {Math.round(assessment.accuracy * 100)}%
-              </div>
+              <div className="text-2xl font-bold text-gray-900 mb-1">{assessment.accuracy}%</div>
               <div className="text-sm text-gray-600">Reading Accuracy</div>
             </div>
             <div className="bg-gray-50 rounded-lg p-4 text-center">
               <div className="text-2xl font-bold text-gray-900 mb-1">
-                {Math.round(comprehensionScore * 100)}%
+                {comprehensionScore}%
               </div>
               <div className="text-sm text-gray-600">Comprehension</div>
             </div>
