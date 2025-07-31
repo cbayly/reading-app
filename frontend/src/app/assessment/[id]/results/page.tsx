@@ -148,10 +148,10 @@ export default function AssessmentResultsPage() {
           <div className="flex justify-between items-center">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">
-                Assessment Results
+                {assessment.student?.name}&apos;s Reading Results
               </h1>
               <p className="text-gray-600">
-                {assessment.student?.name}&apos;s Reading Assessment
+                Here&apos;s how {assessment.student?.name} did on their assessment
               </p>
             </div>
             <button

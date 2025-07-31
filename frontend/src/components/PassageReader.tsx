@@ -133,13 +133,13 @@ export default function PassageReader({ passage, onComplete }: PassageReaderProp
 
       {/* Instructions */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h3 className="font-semibold text-blue-900 mb-2">Instructions:</h3>
+        <h3 className="font-semibold text-blue-900 mb-2">Instructions for Parents:</h3>
         <ul className="text-blue-800 space-y-1 text-sm">
-          <li>• Read the passage carefully and at your own pace</li>
-          <li>• Click on any words that were read incorrectly or skipped</li>
-          <li>• You can pause and resume reading if needed</li>
-          <li>• When you finish reading, click &quot;I&apos;m Done Reading&quot;</li>
-          <li>• You&apos;ll then answer questions about what you read</li>
+          <li>• Have your student read the passage at their own pace</li>
+          <li>• Click any word that is read incorrectly or skipped</li>
+          <li>• Use the pause button if your student needs a break</li>
+          <li>• Click &quot;I&apos;m Done Reading&quot; when they finish</li>
+          <li>• Your student will then answer questions about the passage</li>
         </ul>
       </div>
     </div>

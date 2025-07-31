@@ -139,10 +139,10 @@ export default function AssessmentQuestionsPage() {
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">
-              Reading Assessment
+              {assessment.student?.name}&apos;s Reading Assessment
             </h1>
             <p className="text-gray-600">
-              {assessment.student?.name}&apos;s Reading Test
+              Let&apos;s check {assessment.student?.name}&apos;s understanding of the passage
             </p>
           </div>
         </div>

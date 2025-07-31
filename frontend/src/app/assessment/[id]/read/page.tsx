@@ -106,10 +106,10 @@ export default function AssessmentReadPage() {
         <div className="bg-white rounded-lg shadow-sm border p-8">
           <div className="mb-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-2">
-              Reading Assessment for {assessment.student?.name}
+              {assessment.student?.name}&apos;s Reading Passage
             </h2>
             <p className="text-gray-600">
-              Read the passage below carefully. Click on any words that were read incorrectly or skipped.
+              As {assessment.student?.name} reads, click on any words that are read incorrectly or skipped.
             </p>
           </div>
 
