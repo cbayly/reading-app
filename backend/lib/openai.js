@@ -3,6 +3,8 @@
 
 import OpenAI from 'openai';
 
+console.log('OpenAI API Key exists:', !!process.env.OPENAI_API_KEY);
+
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });

@@ -1,10 +1,14 @@
 import express from "express";
 import cors from "cors";
 import { PrismaClient } from "@prisma/client";
+import dotenv from 'dotenv';
 import authRoutes from '../routes/auth.js';
 import studentRoutes from '../routes/students.js';
 import assessmentRoutes from '../routes/assessments.js';
 import { authenticate } from '../middleware/auth.js';
+
+// Load environment variables from .env file
+dotenv.config();
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
