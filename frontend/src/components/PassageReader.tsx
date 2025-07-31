@@ -4,10 +4,11 @@ import { useState, useEffect } from 'react';
 
 interface PassageReaderProps {
   passage: string;
+  studentName?: string;
   onComplete: (readingTime: number, errorCount: number) => void;
 }
 
-export default function PassageReader({ passage, onComplete }: PassageReaderProps) {
+export default function PassageReader({ passage, studentName, onComplete }: PassageReaderProps) {
   const [startTime, setStartTime] = useState<number | null>(null);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -91,14 +92,8 @@ export default function PassageReader({ passage, onComplete }: PassageReaderProp
     <div className="space-y-6">
       {/* Top Controls Row */}
       <div className="flex justify-between items-center">
-        {/* Timer */}
-        <div className="flex items-center space-x-4">
-          <div>
-            <div className="text-sm text-gray-500">Reading Time</div>
-            <div className="text-2xl font-mono font-bold text-blue-600">
-              {formatTime(elapsedTime)}
-            </div>
-          </div>
+        {/* Start/Pause Button */}
+        <div>
           {!hasStarted ? (
             <button
               onClick={handleStart}
@@ -120,31 +115,16 @@ export default function PassageReader({ passage, onComplete }: PassageReaderProp
           )}
         </div>
 
-        {/* Error Count */}
+        {/* Timer */}
         <div className="text-center">
-          <div className="text-sm text-gray-500">Words Marked as Incorrect</div>
-          <div className="text-2xl font-bold text-red-600">{incorrectWords.size}</div>
+          <div className="text-sm text-gray-500">Reading Time</div>
+          <div className="text-2xl font-mono font-bold text-blue-600">
+            {formatTime(elapsedTime)}
+          </div>
         </div>
 
-        {/* Done Button */}
-        <button
-          onClick={handleComplete}
-          disabled={!hasStarted}
-          className={`px-6 py-3 rounded-lg font-medium transition-colors ${
-            !hasStarted
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              : 'bg-blue-600 text-white hover:bg-blue-700'
-          }`}
-        >
-          I&apos;m Done Reading
-        </button>
-      </div>
-
-      {/* Passage Display */}
-      <div className="bg-gray-50 rounded-lg p-6">
-        <div className="text-lg leading-relaxed text-gray-900 whitespace-pre-wrap break-words">
-          {renderPassage()}
-        </div>
+        {/* Empty space for balance */}
+        <div></div>
       </div>
 
       {/* Instructions */}
@@ -158,6 +138,41 @@ export default function PassageReader({ passage, onComplete }: PassageReaderProp
           <li>• Click &quot;I&apos;m Done Reading&quot; when they finish</li>
           <li>• Your student will then answer questions about the passage</li>
         </ul>
+      </div>
+
+      {/* Reading Instructions */}
+      <div className="text-gray-600 text-center">
+        As {studentName || 'your student'} reads, click on any words that are read incorrectly or skipped.
+      </div>
+
+      {/* Passage Display */}
+      <div className="bg-gray-50 rounded-lg p-6">
+        <div className="text-lg leading-relaxed text-gray-900 whitespace-pre-wrap break-words">
+          {renderPassage()}
+        </div>
+      </div>
+
+      {/* Done Button */}
+      <div className="text-center">
+        <button
+          onClick={handleComplete}
+          disabled={!hasStarted}
+          className={`px-6 py-3 rounded-lg font-medium transition-colors ${
+            !hasStarted
+              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              : 'bg-blue-600 text-white hover:bg-blue-700'
+          }`}
+        >
+          I&apos;m Done Reading
+        </button>
+      </div>
+
+      {/* Error Count */}
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        <div className="flex justify-between items-center">
+          <span className="text-red-800 font-medium">Words Marked as Incorrect:</span>
+          <span className="text-red-800 font-bold text-xl">{incorrectWords.size}</span>
+        </div>
       </div>
     </div>
   );
