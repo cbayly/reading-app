@@ -150,6 +150,12 @@ router.get('/:id', authenticate, async (req, res) => {
         status: true,
         passage: true,
         questions: true,
+        studentAnswers: true,
+        readingTime: true,
+        errorCount: true,
+        wpm: true,
+        accuracy: true,
+        compositeScore: true,
         student: {
           select: {
             name: true,

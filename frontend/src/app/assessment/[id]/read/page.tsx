@@ -36,7 +36,9 @@ export default function AssessmentReadPage() {
 
   const handleReadingComplete = (readingTime: number, errorCount: number) => {
     if (assessment) {
-      router.push(`/assessment/${assessment.id}/questions`);
+      router.push(
+        `/assessment/${assessment.id}/questions?readingTime=${readingTime}&errorCount=${errorCount}`
+      );
     }
   };
 

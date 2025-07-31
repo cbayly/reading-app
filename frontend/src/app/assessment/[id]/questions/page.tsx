@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import api from '@/lib/api';
 import { Assessment } from '@/types/assessment';
 
@@ -15,6 +15,7 @@ interface Question {
 export default function AssessmentQuestionsPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [assessment, setAssessment] = useState<Assessment | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -69,9 +70,14 @@ export default function AssessmentQuestionsPage() {
   const handleSubmit = async () => {
     if (!assessment) return;
 
+    const readingTime = searchParams.get('readingTime');
+    const errorCount = searchParams.get('errorCount');
+
     try {
       await api.put(`/assessments/${assessment.id}/submit`, {
-        answers
+        readingTime: parseInt(readingTime || '0', 10),
+        errorCount: parseInt(errorCount || '0', 10),
+        answers,
       });
       router.push(`/assessment/${assessment.id}/results`);
     } catch (err) {
