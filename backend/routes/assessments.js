@@ -178,18 +178,42 @@ router.put('/:id/submit', authenticate, async (req, res) => {
         id: parseInt(id),
         student: { parentId },
       },
+      include: {
+        student: true, // Include student data for grade level
+      },
     });
 
     if (!assessment) {
       return res.status(404).json({ message: 'Assessment not found' });
     }
 
-    // --- TODO: Move this logic to Parent Task 5.0 ---
-    // Placeholder logic for scoring. This will be fully implemented later.
-    const wpm = 0; // (assessment.passage.split(' ').length / readingTime) * 60;
-    const accuracy = 0; // 1 - (errorCount / assessment.passage.split(' ').length);
-    const compositeScore = 0;
-    // --- End of Placeholder ---
+    // Calculate words per minute (WPM)
+    const wordCount = assessment.passage.split(/\s+/).length;
+    const minutes = readingTime / 60;
+    const wpm = Math.round((wordCount / minutes) * 10) / 10; // Round to 1 decimal place
+
+    // Calculate reading accuracy
+    const accuracy = Math.round(((wordCount - errorCount) / wordCount) * 1000) / 1000; // Round to 3 decimal places
+
+    // Calculate comprehension score (percentage of correct answers)
+    const questions = assessment.questions;
+    let correctAnswers = 0;
+    Object.entries(answers).forEach(([index, answer]) => {
+      if (questions[parseInt(index)].correctAnswer === answer) {
+        correctAnswers++;
+      }
+    });
+    const comprehensionScore = correctAnswers / questions.length;
+
+    // Calculate composite score (weighted average)
+    // 40% WPM, 30% Accuracy, 30% Comprehension
+    const compositeScore = Math.round(
+      (
+        (wpm / 200) * 0.4 + // Normalize WPM to ~1 by dividing by target WPM for grade level
+        accuracy * 0.3 +
+        comprehensionScore * 0.3
+      ) * 100
+    ) / 100;
 
     const updatedAssessment = await prisma.assessment.update({
       where: { id: parseInt(id) },
