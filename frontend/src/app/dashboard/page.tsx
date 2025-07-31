@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth';
-import { getAssessments } from '@/lib/api';
+import { getAssessments, createAssessment } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 interface Student {
   id: number;
@@ -19,9 +19,11 @@ interface Student {
 
 export default function DashboardPage() {
   const { user, logout } = useAuth();
+  const router = useRouter();
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [creatingAssessment, setCreatingAssessment] = useState(false);
 
   useEffect(() => {
     const fetchStudents = async () => {
@@ -142,17 +144,33 @@ export default function DashboardPage() {
 
                     <div className="space-y-2">
                       {hasCompletedAssessment ? (
-                        <Link href="/assessment/results">
-                          <Button className="w-full">
-                            View Results
-                          </Button>
-                        </Link>
+                        <Button
+                          className="w-full"
+                          onClick={() => router.push(`/assessment/${latestAssessment.id}/results`)}
+                        >
+                          View Results
+                        </Button>
                       ) : (
-                        <Link href="/assessment/intro">
-                          <Button className="w-full">
-                            Start Assessment
-                          </Button>
-                        </Link>
+                        <Button
+                          className="w-full"
+                          onClick={async () => {
+                            try {
+                              setCreatingAssessment(true);
+                              const { assessment } = await createAssessment(student.id);
+                              router.push(`/assessment/${assessment.id}/intro`);
+                            } catch (err) {
+                              if (err instanceof Error) {
+                                setError(err.message);
+                              } else {
+                                setError('Failed to create assessment');
+                              }
+                              setCreatingAssessment(false);
+                            }
+                          }}
+                          disabled={creatingAssessment}
+                        >
+                          {creatingAssessment ? 'Creating Assessment...' : 'Start Assessment'}
+                        </Button>
                       )}
                     </div>
                   </div>
