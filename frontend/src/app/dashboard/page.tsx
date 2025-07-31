@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useAuthContext } from '../contexts/AuthContext';
+import { useAuth } from '@/lib/auth';
 import { getAssessments } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
 import Link from 'next/link';
@@ -18,7 +18,7 @@ interface Student {
 }
 
 export default function DashboardPage() {
-  const { user, logout } = useAuthContext();
+  const { user, logout } = useAuth();
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -28,8 +28,12 @@ export default function DashboardPage() {
       try {
         const data = await getAssessments();
         setStudents(data);
-      } catch (err: any) {
-        setError(err.response?.data?.message || 'Failed to load students');
+      } catch (err) {
+        if (err instanceof Error) {
+          setError(err.message);
+        } else {
+          setError('Failed to load students');
+        }
       } finally {
         setLoading(false);
       }
@@ -65,12 +69,12 @@ export default function DashboardPage() {
                 Reading Dashboard
               </h1>
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                Welcome back, {user?.name}!
+                Welcome back, {user?.name || 'Parent'}!
               </p>
             </div>
             <div className="flex items-center space-x-4">
               <Link href="/setup">
-                <Button variant="secondary">Add Child</Button>
+                <Button variant="secondary">Add Student</Button>
               </Link>
               <Button variant="secondary" onClick={handleLogout}>
                 Log Out
@@ -98,14 +102,14 @@ export default function DashboardPage() {
             </p>
             <Link href="/setup">
               <Button className="text-lg px-8 py-4">
-                Add Your First Child
+                Add Your First Student
               </Button>
             </Link>
           </div>
         ) : (
           <div>
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
-              Your Children
+              Your Students
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {students.map((student) => {

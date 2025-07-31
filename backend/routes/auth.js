@@ -30,7 +30,7 @@ router.post('/signup', async (req, res) => {
       },
     });
 
-    const token = generateToken({ id: parent.id, email: parent.email });
+    const token = generateToken({ id: parent.id, name: parent.name, email: parent.email });
 
     res.status(201).json({ token, parent: { id: parent.id, name: parent.name, email: parent.email } });
   } catch (error) {
@@ -58,7 +58,7 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    const token = generateToken({ id: parent.id, email: parent.email });
+    const token = generateToken({ id: parent.id, name: parent.name, email: parent.email });
 
     res.status(200).json({ token, parent: { id: parent.id, name: parent.name, email: parent.email } });
   } catch (error) {

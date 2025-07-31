@@ -7,7 +7,7 @@ export default function SignUpPage() {
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Create your account</h1>
           <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-            And start your child's reading journey today.
+            And start your child&apos;s reading journey today.
           </p>
         </div>
         <SignUpForm />

@@ -7,7 +7,7 @@ The Parent Sign-Up Flow is the foundational onboarding experience for our readin
 ## Goals
 
 1. **Streamline Parent Onboarding**: Reduce friction in account creation and student setup to under 5 minutes total completion time
-2. **Capture Essential Student Data**: Collect student information (name, grade, interests) needed for personalized AI-generated reading assessments
+2. **Capture Essential Student Data**: Collect student information (name, birthday, interests) needed for personalized AI-generated reading assessments
 3. **Establish Secure Authentication**: Implement robust parent authentication using Supabase Auth with proper validation
 4. **Enable Multi-Child Support**: Allow parents to add unlimited children to their account
 5. **Prepare for Assessment**: Guide parents to the reading assessment entry point after successful setup
@@ -34,7 +34,7 @@ The Parent Sign-Up Flow is the foundational onboarding experience for our readin
 ### Account Creation
 4. The system must display a registration form with fields: Parent Name, Email, Password, Confirm Password
 5. The system must validate email uniqueness in real-time
-6. The system must enforce password requirements: minimum 8 characters with complexity rules
+6. The system must enforce password requirements: minimum 8 characters
 7. The system must require password confirmation matching
 8. The system must include Terms of Service & Privacy Policy acceptance checkbox (required)
 9. The system must integrate with Supabase Auth for account creation
@@ -44,8 +44,8 @@ The Parent Sign-Up Flow is the foundational onboarding experience for our readin
 
 ### Student Setup
 13. The system must guide parents to add at least one child after successful account creation
-14. The system must display student setup form with fields: Child's Name (required), Age (optional), Grade Level (required), Interests (optional, multi-select or text)
-15. The system must require Grade Level selection from grades 3-7
+14. The system must display student setup form with fields: Child's Name (required), Birthday (required), Grade Level (required), Interests (required, multi-select or text)
+15. The system must require Grade Level selection from grades 1-12
 16. The system must create Student record linked to Parent.id in database
 17. The system must store interests as an array in the Student table
 18. The system must provide "Add Another Child" option allowing unlimited student additions
@@ -54,7 +54,7 @@ The Parent Sign-Up Flow is the foundational onboarding experience for our readin
 
 ### Assessment Preparation
 21. The system must display "Start First Reading Check" CTA after student setup completion
-22. The system must explain the assessment: "~10–15 minutes, adaptive difficulty, helps personalize weekly reading"
+22. The system must explain the assessment: "~10–15 minutes, adaptive difficulty, helps personalize weekly reading, develops a baseline to measure progress"
 23. The system must create new Assessment record for the student when starting
 24. The system must show assessment intro screen before beginning
 
@@ -104,12 +104,12 @@ The Parent Sign-Up Flow is the foundational onboarding experience for our readin
 
 ## Open Questions
 
-1. **Email Verification**: Should we implement email verification for MVP or defer to post-launch?
-2. **Password Reset Flow**: What's the desired password reset experience using Supabase Auth?
-3. **Data Migration**: How should we handle users who want to transfer data between accounts?
-4. **Grade Level Validation**: Should we validate student age against grade level for consistency?
-5. **Interest Categories**: Should we provide predefined interest categories or allow free-form text input?
-6. **Assessment Scheduling**: Should parents be able to schedule assessments for later or must they start immediately?
+1. **Email Verification**: Should we implement email verification for MVP or defer to post-launch? We'll do this later.
+2. **Password Reset Flow**: What's the desired password reset experience using Supabase Auth? Have a link to reset password and email reset password instructions and reset link.
+3. **Data Migration**: How should we handle users who want to transfer data between accounts? Not MVP, but have an admin ui that allows the data migration.
+4. **Grade Level Validation**: Should we validate student age against grade level for consistency? This would be nice to have the grade autopopulate based on age. The user would then be able to manually override it.
+5. **Interest Categories**: Should we provide predefined interest categories or allow free-form text input? Use AI to generate some basic ones appropriate for that age group. Parents could then select some of those and also add their own. This will need openai api integration to generate.
+6. **Assessment Scheduling**: Should parents be able to schedule assessments for later or must they start immediately? They need to do it before the weekly activites are created. The weekly assessment will be built in a future feature.
 
 ---
 

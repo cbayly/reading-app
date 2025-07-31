@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useFlowContext } from '@/app/contexts/FlowContext';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { FormInput } from '@/components/ui/FormInput';
+import api from '@/lib/api';
 
 interface StudentData {
   name: string;
@@ -22,7 +23,7 @@ export function StudentForm() {
     interests: '',
   });
   const [error, setError] = useState<string | null>(null);
-  const { navigateTo } = useFlowContext();
+  const router = useRouter();
 
   // Calculate grade level based on birthday
   const calculateGradeLevel = (birthday: string): number => {
@@ -60,17 +61,28 @@ export function StudentForm() {
     e.preventDefault();
     setError(null);
     try {
+      // Call API to create the current student
+      const response = await api.post('/students', {
+        name: currentStudent.name,
+        birthday: currentStudent.birthday,
+        gradeLevel: currentStudent.gradeLevel,
+        interests: currentStudent.interests
+      });
+      
+      console.log('Student created:', response.data);
+      
       // Add current student to the list
       const updatedStudents = [...students, currentStudent];
       setStudents(updatedStudents);
       
-      // TODO: Call API to create all students
-      console.log('All students data:', updatedStudents);
-      
       // Move to the "add another child" step
       setStep(4);
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'An error occurred while saving student.');
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('An unknown error occurred');
+      }
     }
   };
 
@@ -86,7 +98,7 @@ export function StudentForm() {
   };
 
   const completeSetup = () => {
-    navigateTo('assessment_intro');
+    router.push('/assessment/intro');
   };
 
   const nextStep = () => setStep(step + 1);
@@ -135,7 +147,7 @@ export function StudentForm() {
       <form onSubmit={handleSubmit}>
         {step === 1 && (
           <div className="space-y-6">
-            <h2 className="text-2xl font-bold">Let's start with the basics</h2>
+            <h2 className="text-2xl font-bold">Let&apos;s start with the basics</h2>
             <FormInput
               label="Child's Name"
               id="name"
@@ -164,7 +176,7 @@ export function StudentForm() {
           <div className="space-y-6">
             <h2 className="text-2xl font-bold">What grade is your child in?</h2>
             <p className="text-gray-600 dark:text-gray-400">
-              We've automatically calculated this based on your child's birthday, but you can adjust it if needed.
+              We&apos;ve automatically calculated this based on your child&apos;s birthday, but you can adjust it if needed.
             </p>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">

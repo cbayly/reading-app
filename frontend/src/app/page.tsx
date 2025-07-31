@@ -21,7 +21,7 @@ export default function Home() {
 
       {/* Hero Section */}
       <main className="flex flex-col items-center justify-center text-center p-24">
-        <h2 className="text-5xl font-bold mb-4">Unlock Your Child's Reading Potential</h2>
+        <h2 className="text-5xl font-bold mb-4">Unlock Your Child&apos;s Reading Potential</h2>
         <p className="text-xl text-gray-600 dark:text-gray-400 mb-8 max-w-2xl">
           Track progress, discover new books, and make reading fun with our personalized assessments and engaging activities.
         </p>
@@ -37,11 +37,11 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="text-center p-6 border border-gray-200 dark:border-gray-700 rounded-lg">
               <h4 className="text-2xl font-bold mb-2">Track Progress</h4>
-              <p>See your child's words per minute, reading accuracy, and comprehension improve over time.</p>
+              <p>See your child&apos;s words per minute, reading accuracy, and comprehension improve over time.</p>
             </div>
             <div className="text-center p-6 border border-gray-200 dark:border-gray-700 rounded-lg">
               <h4 className="text-2xl font-bold mb-2">Personalized Assessments</h4>
-              <p>AI-generated passages based on your child's interests and reading level.</p>
+              <p>AI-generated passages based on your child&apos;s interests and reading level.</p>
             </div>
             <div className="text-center p-6 border border-gray-200 dark:border-gray-700 rounded-lg">
               <h4 className="text-2xl font-bold mb-2">Engaging Activities</h4>
