@@ -73,17 +73,21 @@ export default function PassageReader({ passage, studentName, onComplete }: Pass
     return words.map((word, index) => {
       const isIncorrect = incorrectWords.has(index);
       return (
-        <span
-          key={index}
-          onClick={() => handleWordClick(index)}
-          className={`cursor-pointer transition-colors ${
-            isIncorrect
-              ? 'bg-red-200 text-red-800 px-1 rounded'
-              : 'hover:bg-gray-200 px-1 rounded'
-          }`}
-        >
-          {word}
-        </span>
+        <>
+          <span
+            key={index}
+            onClick={() => handleWordClick(index)}
+            className={`cursor-pointer inline-block transition-colors whitespace-nowrap ${
+              isIncorrect
+                ? 'bg-red-200 text-red-800 px-1 rounded'
+                : 'hover:bg-gray-200 px-1 rounded'
+            }`}
+          >
+            {word}
+          </span>
+          {/* Add a space after each word */}
+          <span className="inline-block">&nbsp;</span>
+        </>
       );
     });
   };
@@ -142,7 +146,7 @@ export default function PassageReader({ passage, studentName, onComplete }: Pass
 
       {/* Passage Display */}
       <div className="bg-gray-50 rounded-lg p-6">
-        <div className="text-lg leading-relaxed text-gray-900 whitespace-pre-wrap break-words">
+        <div className="text-lg leading-relaxed text-gray-900">
           {renderPassage()}
         </div>
       </div>
