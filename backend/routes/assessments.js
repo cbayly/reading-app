@@ -1,6 +1,7 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authenticate } from '../middleware/auth.js';
+import { generateAssessment } from '../lib/openai.js';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -41,11 +42,16 @@ router.post('/', authenticate, async (req, res) => {
       });
     }
 
-    // Create new assessment
+    // Generate new assessment content from OpenAI
+    const assessmentContent = await generateAssessment(student);
+
+    // Create new assessment in the database
     const assessment = await prisma.assessment.create({
       data: {
         studentId,
-        status: 'not_started'
+        status: 'in_progress',
+        passage: assessmentContent.passage,
+        questions: assessmentContent.questions,
       }
     });
 
@@ -122,4 +128,87 @@ router.get('/', authenticate, async (req, res) => {
   }
 });
 
-export default router; 
+// GET /api/assessments/:id
+router.get('/:id', authenticate, async (req, res) => {
+  const { id } = req.params;
+  const parentId = req.user.id;
+
+  try {
+    const assessment = await prisma.assessment.findFirst({
+      where: {
+        id: parseInt(id),
+        student: {
+          parentId,
+        },
+      },
+      select: {
+        id: true,
+        status: true,
+        passage: true,
+        questions: true,
+        student: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    });
+
+    if (!assessment) {
+      return res.status(404).json({ message: 'Assessment not found' });
+    }
+
+    res.json(assessment);
+  } catch (error) {
+    console.error('Assessment fetch error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching the assessment' });
+  }
+});
+
+// PUT /api/assessments/:id/submit
+router.put('/:id/submit', authenticate, async (req, res) => {
+  const { id } = req.params;
+  const { readingTime, errorCount, answers } = req.body;
+  const parentId = req.user.id;
+
+  try {
+    // First, verify the assessment exists and belongs to the parent
+    const assessment = await prisma.assessment.findFirst({
+      where: {
+        id: parseInt(id),
+        student: { parentId },
+      },
+    });
+
+    if (!assessment) {
+      return res.status(404).json({ message: 'Assessment not found' });
+    }
+
+    // --- TODO: Move this logic to Parent Task 5.0 ---
+    // Placeholder logic for scoring. This will be fully implemented later.
+    const wpm = 0; // (assessment.passage.split(' ').length / readingTime) * 60;
+    const accuracy = 0; // 1 - (errorCount / assessment.passage.split(' ').length);
+    const compositeScore = 0;
+    // --- End of Placeholder ---
+
+    const updatedAssessment = await prisma.assessment.update({
+      where: { id: parseInt(id) },
+      data: {
+        status: 'completed',
+        readingTime,
+        errorCount,
+        studentAnswers: answers,
+        wpm,
+        accuracy,
+        compositeScore,
+      },
+    });
+
+    res.json(updatedAssessment);
+  } catch (error) {
+    console.error('Assessment submission error:', error);
+    res.status(500).json({ message: 'An error occurred while submitting the assessment' });
+  }
+});
+
+export default router;
