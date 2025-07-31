@@ -24,7 +24,7 @@ The primary goal is to provide an adaptive, interest-based reading passage that 
 
 ### 4.1. Assessment Setup
 1.  The parent must be able to launch the assessment from the student’s dashboard or a dedicated assessment section.
-2.  The system must allow the parent to select which of their children is taking the assessment.
+2.  The system must allow the parent to select which of their children is taking the assessment if launched from a dedicated assessment section. 
 3.  Upon starting the assessment, the system will make a request to the backend to generate a new assessment passage.
 
 ### 4.2. Passage Generation (Backend)
@@ -44,9 +44,10 @@ The primary goal is to provide an adaptive, interest-based reading passage that 
 2.  A timer will begin when the parent clicks a "Start" button.
 3.  The parent will be able to click on any word in the passage to mark it as an error.
 4.  Clicked words will be visually highlighted (e.g., in red).
-5.  A counter will display the total number of errors marked.
-6.  The timer can be paused and resumed. The system will record the total aggregated time.
-7.  The parent will have the option to reset the passage, which will clear the timer and any marked errors.
+5.  Clicked words will be listed as incorrect words.
+6.  A counter will display the total number of errors marked.
+7.  The timer can be paused and resumed. The system will record the total aggregated time.
+8.  The parent will have the option to reset the passage, which will clear the timer, any marked errors, and list of incorrect words.
 
 ### 4.4. Comprehension & Vocabulary Questions (Frontend)
 1.  After the reading portion is complete, the student will be presented with the 8 multiple-choice questions.
@@ -68,7 +69,7 @@ The primary goal is to provide an adaptive, interest-based reading passage that 
     *   A review of the fluency metrics and the comprehension questions.
 
 ### 4.6. Other Requirements
-1.  Parents must be able to download and print the passage, questions, and an answer key.
+1.  Parents must be able to download and print the passage and questions.
 2.  The assessment results will be saved and displayed in the student's profile, including a history of assessments and growth charts.
 
 ## 5. Non-Goals (Out of Scope for this version)

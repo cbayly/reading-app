@@ -13,11 +13,7 @@ export default function PassageReader({ passage, onComplete }: PassageReaderProp
   const [isPaused, setIsPaused] = useState(false);
   const [pauseStartTime, setPauseStartTime] = useState<number | null>(null);
   const [incorrectWords, setIncorrectWords] = useState<Set<number>>(new Set());
-
-  useEffect(() => {
-    // Start the timer when the component mounts
-    setStartTime(Date.now());
-  }, []);
+  const [hasStarted, setHasStarted] = useState(false);
 
   useEffect(() => {
     if (!startTime || isPaused) return;
@@ -28,6 +24,11 @@ export default function PassageReader({ passage, onComplete }: PassageReaderProp
 
     return () => clearInterval(interval);
   }, [startTime, isPaused]);
+
+  const handleStart = () => {
+    setStartTime(Date.now());
+    setHasStarted(true);
+  };
 
   const handlePause = () => {
     if (!isPaused) {
@@ -88,45 +89,60 @@ export default function PassageReader({ passage, onComplete }: PassageReaderProp
 
   return (
     <div className="space-y-6">
-      {/* Timer and Controls */}
+      {/* Top Controls Row */}
       <div className="flex justify-between items-center">
-        <div className="text-right">
-          <div className="text-sm text-gray-500">Reading Time</div>
-          <div className="text-2xl font-mono font-bold text-blue-600">
-            {formatTime(elapsedTime)}
+        {/* Timer */}
+        <div className="flex items-center space-x-4">
+          <div>
+            <div className="text-sm text-gray-500">Reading Time</div>
+            <div className="text-2xl font-mono font-bold text-blue-600">
+              {formatTime(elapsedTime)}
+            </div>
           </div>
+          {!hasStarted ? (
+            <button
+              onClick={handleStart}
+              className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+            >
+              Start Reading
+            </button>
+          ) : (
+            <button
+              onClick={handlePause}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                isPaused
+                  ? 'bg-green-600 text-white hover:bg-green-700'
+                  : 'bg-yellow-600 text-white hover:bg-yellow-700'
+              }`}
+            >
+              {isPaused ? 'Resume' : 'Pause'}
+            </button>
+          )}
         </div>
-        <div className="flex space-x-3">
-          <button
-            onClick={handlePause}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              isPaused
-                ? 'bg-green-600 text-white hover:bg-green-700'
-                : 'bg-yellow-600 text-white hover:bg-yellow-700'
-            }`}
-          >
-            {isPaused ? 'Resume' : 'Pause'}
-          </button>
-          <button
-            onClick={handleComplete}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-          >
-            I&apos;m Done Reading
-          </button>
-        </div>
-      </div>
 
-      {/* Error Count Display */}
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-        <div className="flex justify-between items-center">
-          <span className="text-red-800 font-medium">Words Marked as Incorrect:</span>
-          <span className="text-red-800 font-bold text-xl">{incorrectWords.size}</span>
+        {/* Error Count */}
+        <div className="text-center">
+          <div className="text-sm text-gray-500">Words Marked as Incorrect</div>
+          <div className="text-2xl font-bold text-red-600">{incorrectWords.size}</div>
         </div>
+
+        {/* Done Button */}
+        <button
+          onClick={handleComplete}
+          disabled={!hasStarted}
+          className={`px-6 py-3 rounded-lg font-medium transition-colors ${
+            !hasStarted
+              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              : 'bg-blue-600 text-white hover:bg-blue-700'
+          }`}
+        >
+          I&apos;m Done Reading
+        </button>
       </div>
 
       {/* Passage Display */}
       <div className="bg-gray-50 rounded-lg p-6">
-        <div className="text-lg leading-relaxed text-gray-900">
+        <div className="text-lg leading-relaxed text-gray-900 whitespace-pre-wrap break-words">
           {renderPassage()}
         </div>
       </div>
@@ -135,6 +151,7 @@ export default function PassageReader({ passage, onComplete }: PassageReaderProp
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <h3 className="font-semibold text-blue-900 mb-2">Instructions for Parents:</h3>
         <ul className="text-blue-800 space-y-1 text-sm">
+          <li>• Click "Start Reading" to begin the timer</li>
           <li>• Have your student read the passage at their own pace</li>
           <li>• Click any word that is read incorrectly or skipped</li>
           <li>• Use the pause button if your student needs a break</li>
