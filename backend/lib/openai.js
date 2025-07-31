@@ -53,7 +53,7 @@ export async function generateAssessment(student) {
     const prompt = constructPrompt(student);
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: 'gpt-4',
       messages: [{ role: 'user', content: prompt }],
       response_format: { type: 'json_object' },
       temperature: 0.7,
@@ -73,8 +73,16 @@ export async function generateAssessment(student) {
 
   } catch (error) {
     console.error('Error generating assessment from OpenAI:', error);
-    // In a real application, you might have more sophisticated fallback logic,
-    // like using a pre-written passage from a database.
-    throw new Error('Failed to generate assessment. Please try again later.');
+    
+    // Provide more specific error messages
+    if (error.code === 'invalid_api_key') {
+      throw new Error('OpenAI API key is invalid or missing. Please check your environment variables.');
+    } else if (error.code === 'model_not_found') {
+      throw new Error('The specified OpenAI model is not available. Please check the model configuration.');
+    } else {
+      // In a real application, you might have more sophisticated fallback logic,
+      // like using a pre-written passage from a database.
+      throw new Error(`Failed to generate assessment: ${error.message}`);
+    }
   }
 }

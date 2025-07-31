@@ -17,9 +17,13 @@ router.post('/', authenticate, async (req, res) => {
 
   try {
     // Verify the student belongs to the authenticated parent
+    console.log('Creating assessment for:', { studentId, parentId });
+    
     const student = await prisma.student.findFirst({
       where: { id: studentId, parentId }
     });
+
+    console.log('Found student:', student);
 
     if (!student) {
       return res.status(404).json({ message: 'Student not found' });
