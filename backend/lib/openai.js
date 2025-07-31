@@ -55,7 +55,7 @@ export async function generateAssessment(student) {
     const prompt = constructPrompt(student);
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4',
+      model: 'gpt-3.5-turbo',
       messages: [{ role: 'user', content: prompt }],
       response_format: { type: 'json_object' },
       temperature: 0.7,

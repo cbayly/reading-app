@@ -65,7 +65,7 @@ router.post('/', authenticate, async (req, res) => {
     });
   } catch (error) {
     console.error('Assessment creation error:', error);
-    res.status(500).json({ message: 'An error occurred while creating the assessment' });
+    res.status(500).json({ message: error.message || 'An error occurred while creating the assessment' });
   }
 });
 
