@@ -197,31 +197,37 @@ export default function AssessmentResultsPage() {
               </div>
               <div className="text-sm text-blue-800">Composite Score</div>
               <div className="text-lg font-semibold text-blue-700 mt-1">
-                {gradeLevel}
+                {assessment.readingLevelLabel || 'Grade Level Not Available'}
               </div>
               
               {/* Tooltip */}
               <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
-                <div className="font-semibold mb-1">Composite Score Calculation:</div>
-                <div>• Fluency: {Math.round((assessment.wpm || 0) * (assessment.accuracy || 0) / 100)} (WPM × Accuracy)</div>
-                <div>• Comp/Vocab: {Math.round((comprehensionScore / 100) * 4 * 25)} (Correct answers × 25 points)</div>
-                <div>• Final: ({Math.round((assessment.wpm || 0) * (assessment.accuracy || 0) / 100)} × 0.5) + ({Math.round((comprehensionScore / 100) * 4 * 25)} × 0.5)</div>
+                <div className="font-semibold mb-1">Composite Score Breakdown:</div>
+                <div>• Fluency Score: {assessment.fluencyScore?.toFixed(1) || 'N/A'}</div>
+                <div>• Comp/Vocab Score: {assessment.compVocabScore?.toFixed(1) || 'N/A'}</div>
+                <div>• Final: ({assessment.fluencyScore?.toFixed(1) || 0} × 0.5) + ({assessment.compVocabScore?.toFixed(1) || 0} × 0.5)</div>
                 <div className="border-t border-gray-700 mt-1 pt-1 font-bold">
                   Total: {assessment.compositeScore || 0}
                 </div>
                 <div className="text-xs mt-1">
-                  Grade Level: {gradeLevel}
+                  Reading Level: {assessment.readingLevelLabel || 'N/A'}
                 </div>
                 <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
               </div>
             </div>
-            <div className="text-xl font-semibold text-gray-900">
-              {gradeEquivalent} • {gradeLevel}
+            <div className={`text-xl font-semibold ${
+              assessment.readingLevelLabel === 'Above Grade Level' ? 'text-green-600' :
+              assessment.readingLevelLabel === 'At Grade Level' ? 'text-blue-600' :
+              assessment.readingLevelLabel === 'Slightly Below Grade Level' ? 'text-yellow-600' :
+              assessment.readingLevelLabel === 'Below Grade Level' ? 'text-red-600' :
+              'text-gray-900'
+            }`}>
+              {assessment.readingLevelLabel || 'Grade Level Not Available'}
             </div>
           </div>
 
           {/* Detailed Metrics */}
-          <div className="grid grid-cols-3 gap-6 mb-12">
+          <div className="grid grid-cols-4 gap-6 mb-12">
             <div className="bg-gray-50 rounded-lg p-4 text-center">
               <div className="text-2xl font-bold text-gray-900 mb-1">{assessment.wpm || 0}</div>
               <div className="text-sm text-gray-600">Words per Minute</div>
@@ -232,9 +238,15 @@ export default function AssessmentResultsPage() {
             </div>
             <div className="bg-gray-50 rounded-lg p-4 text-center">
               <div className="text-2xl font-bold text-gray-900 mb-1">
-                {comprehensionScore}%
+                {assessment.fluencyScore?.toFixed(1) || 'N/A'}
               </div>
-              <div className="text-sm text-gray-600">Comprehension</div>
+              <div className="text-sm text-gray-600">Fluency Score</div>
+            </div>
+            <div className="bg-gray-50 rounded-lg p-4 text-center">
+              <div className="text-2xl font-bold text-gray-900 mb-1">
+                {assessment.compVocabScore?.toFixed(1) || 'N/A'}
+              </div>
+              <div className="text-sm text-gray-600">Comp/Vocab Score</div>
             </div>
           </div>
 

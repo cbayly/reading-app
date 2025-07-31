@@ -81,8 +81,18 @@ export default function AssessmentQuestionsPage() {
         answers,
       });
       router.push(`/assessment/${assessment.id}/results`);
-    } catch (err) {
-      if (err instanceof Error) {
+    } catch (err: any) {
+      // Handle specific error cases
+      if (err.response?.status === 400) {
+        const errorData = err.response.data;
+        if (errorData.error === 'INVALID_ATTEMPT') {
+          setError('Your reading session was too short to score accurately. Please try again with a longer reading session.');
+        } else if (errorData.error === 'INVALID_GRADE_LEVEL') {
+          setError('Grade level not supported for scoring. Please contact support.');
+        } else {
+          setError(errorData.message || 'Invalid request. Please try again.');
+        }
+      } else if (err instanceof Error) {
         setError(err.message);
       } else {
         setError('Failed to submit answers');

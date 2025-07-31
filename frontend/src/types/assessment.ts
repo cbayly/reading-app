@@ -12,6 +12,9 @@ export interface Assessment {
   wpm?: number;
   accuracy?: number;
   compositeScore?: number;
+  fluencyScore?: number;
+  compVocabScore?: number;
+  readingLevelLabel?: string;
   student?: {
     name: string;
   };

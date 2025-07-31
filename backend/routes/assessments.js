@@ -197,15 +197,49 @@ router.put('/:id/submit', authenticate, async (req, res) => {
       return res.status(404).json({ message: 'Assessment not found' });
     }
 
-    // Calculate words per minute (WPM)
+    // Validate grade level (only supports grades 1-12)
+    if (assessment.student.gradeLevel < 1 || assessment.student.gradeLevel > 12) {
+      return res.status(400).json({ 
+        message: 'Grade level not supported', 
+        error: 'INVALID_GRADE_LEVEL',
+        details: 'Only grades 1-12 are supported for scoring'
+      });
+    }
+
+    // Get benchmark WPM for student's grade level
+    const benchmark = await prisma.benchmark.findUnique({
+      where: { grade: assessment.student.gradeLevel }
+    });
+
+    if (!benchmark) {
+      return res.status(500).json({ 
+        message: 'Benchmark data not found for grade level',
+        error: 'MISSING_BENCHMARK'
+      });
+    }
+
+    // Calculate base metrics
     const wordCount = assessment.passage.split(/\s+/).length;
     const minutes = readingTime / 60;
-    const wpm = minutes > 0 ? Math.round(wordCount / minutes) : 0;
+    
+    // Check for invalid attempt
+    if (minutes < 0.5 || wordCount < 50) {
+      return res.status(400).json({ 
+        message: 'Reading attempt too short to score accurately',
+        error: 'INVALID_ATTEMPT',
+        details: 'Please try again with a longer reading session'
+      });
+    }
 
-    // Calculate reading accuracy as a percentage
-    const accuracy = wordCount > 0 ? Math.round(((wordCount - errorCount) / wordCount) * 100) : 0;
+    const wpm = wordCount / minutes;
+    const accuracyPercent = ((wordCount - errorCount) / wordCount) * 100;
 
-    // Calculate comprehension and vocabulary scores separately
+    // Calculate fluency score
+    const fluencyNormalized = (wpm / benchmark.wpm) * 100;
+    const cappedFluencyNormalized = Math.min(fluencyNormalized, 150);
+    const fluencyScore = cappedFluencyNormalized * (accuracyPercent / 100);
+
+    // Calculate comprehension and vocabulary scores
     const questions = assessment.questions;
     let comprehensionCorrect = 0;
     let vocabularyCorrect = 0;
@@ -214,32 +248,45 @@ router.put('/:id/submit', authenticate, async (req, res) => {
     
     Object.entries(answers).forEach(([index, answer]) => {
       const question = questions[parseInt(index)];
-      if (question.correctAnswer === answer) {
-        if (question.type === 'comprehension') {
+      if (question.type === 'comprehension') {
+        comprehensionTotal++;
+        if (question.correctAnswer === answer) {
           comprehensionCorrect++;
-        } else if (question.type === 'vocabulary') {
+        }
+      } else if (question.type === 'vocabulary') {
+        vocabularyTotal++;
+        if (question.correctAnswer === answer) {
           vocabularyCorrect++;
         }
       }
-      if (question.type === 'comprehension') {
-        comprehensionTotal++;
-      } else if (question.type === 'vocabulary') {
-        vocabularyTotal++;
-      }
     });
     
-    const comprehensionScore = comprehensionTotal > 0 ? (comprehensionCorrect / comprehensionTotal) * 100 : 0;
-    const vocabularyScore = vocabularyTotal > 0 ? (vocabularyCorrect / vocabularyTotal) * 100 : 0;
-    
-    // Calculate total comprehension/vocabulary score (max 200 points)
-    const totalCompVocab = comprehensionCorrect + vocabularyCorrect;
-    const compVocabScore = totalCompVocab * 25; // Each correct answer = 25 points
-    
-    // Calculate fluency score (WPM × accuracy as decimal)
-    const fluencyScore = wpm * (accuracy / 100);
-    
-    // Calculate composite score: (fluency × 0.5) + (comp/vocab × 0.5)
+    // Calculate comp/vocab score with edge case handling
+    let compVocabScore = 0;
+    if (comprehensionTotal > 0 && vocabularyTotal > 0) {
+      const comprehensionPercent = (comprehensionCorrect / comprehensionTotal) * 100;
+      const vocabularyPercent = (vocabularyCorrect / vocabularyTotal) * 100;
+      compVocabScore = (comprehensionPercent + vocabularyPercent) / 2;
+    } else if (comprehensionTotal > 0) {
+      compVocabScore = (comprehensionCorrect / comprehensionTotal) * 100;
+    } else if (vocabularyTotal > 0) {
+      compVocabScore = (vocabularyCorrect / vocabularyTotal) * 100;
+    }
+
+    // Calculate composite score
     const compositeScore = Math.round((fluencyScore * 0.5) + (compVocabScore * 0.5));
+
+    // Map to reading level
+    let readingLevelLabel;
+    if (compositeScore >= 150) {
+      readingLevelLabel = 'Above Grade Level';
+    } else if (compositeScore >= 120) {
+      readingLevelLabel = 'At Grade Level';
+    } else if (compositeScore >= 90) {
+      readingLevelLabel = 'Slightly Below Grade Level';
+    } else {
+      readingLevelLabel = 'Below Grade Level';
+    }
 
     const updatedAssessment = await prisma.assessment.update({
       where: { id: parseInt(id) },
@@ -249,8 +296,11 @@ router.put('/:id/submit', authenticate, async (req, res) => {
         errorCount,
         studentAnswers: answers,
         wpm,
-        accuracy,
+        accuracy: accuracyPercent,
         compositeScore,
+        fluencyScore,
+        compVocabScore,
+        readingLevelLabel,
       },
     });
 
