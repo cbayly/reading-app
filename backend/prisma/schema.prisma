@@ -39,11 +39,19 @@ model Student {
 }
 
 model Assessment {
-  id        Int      @id @default(autoincrement())
-  studentId Int      @map("student_id")
-  status    String   @default("not_started") // not_started, in_progress, completed, abandoned
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id             Int      @id @default(autoincrement())
+  studentId      Int      @map("student_id")
+  status         String   @default("not_started") // not_started, in_progress, completed, abandoned
+  passage        String?
+  questions      Json?
+  studentAnswers Json?    @map("student_answers")
+  readingTime    Int?     @map("reading_time")
+  errorCount     Int?     @map("error_count")
+  wpm            Float?
+  accuracy       Float?
+  compositeScore Float?   @map("composite_score")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
   
   // Relations
   student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
