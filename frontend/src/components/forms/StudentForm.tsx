@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { FormInput } from '@/components/ui/FormInput';
+import { createAssessment } from '@/lib/api';
 import api from '@/lib/api';
 
 interface StudentData {
@@ -23,6 +24,8 @@ export function StudentForm() {
     interests: '',
   });
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [newStudentId, setNewStudentId] = useState<number | null>(null);
   const router = useRouter();
 
   // Calculate grade level based on birthday
@@ -60,21 +63,23 @@ export function StudentForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setIsSubmitting(true);
     try {
       // Call API to create the current student
       const response = await api.post('/students', {
         name: currentStudent.name,
         birthday: currentStudent.birthday,
         gradeLevel: currentStudent.gradeLevel,
-        interests: currentStudent.interests
+        interests: currentStudent.interests,
       });
-      
+
       console.log('Student created:', response.data);
-      
+      setNewStudentId(response.data.id);
+
       // Add current student to the list
       const updatedStudents = [...students, currentStudent];
       setStudents(updatedStudents);
-      
+
       // Move to the "add another child" step
       setStep(4);
     } catch (err) {
@@ -83,6 +88,8 @@ export function StudentForm() {
       } else {
         setError('An unknown error occurred');
       }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -97,8 +104,23 @@ export function StudentForm() {
     setStep(1);
   };
 
-  const completeSetup = () => {
-    router.push('/assessment/intro');
+  const completeSetup = async () => {
+    if (!newStudentId) {
+      setError('Could not find the new student to start the assessment.');
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const { assessment } = await createAssessment(newStudentId);
+      router.push(`/assessment/${assessment.id}/intro`);
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('Failed to create assessment.');
+      }
+      setIsSubmitting(false);
+    }
   };
 
   const nextStep = () => setStep(step + 1);
@@ -224,8 +246,8 @@ export function StudentForm() {
               <Button type="button" variant="secondary" onClick={prevStep}>
                 Back
               </Button>
-              <Button type="submit">
-                Complete Setup
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? 'Saving...' : 'Complete Setup'}
               </Button>
             </div>
           </div>
@@ -241,8 +263,8 @@ export function StudentForm() {
               <Button type="button" variant="secondary" onClick={addAnotherChild}>
                 Add Another Child
               </Button>
-              <Button type="button" onClick={completeSetup}>
-                Start Reading Assessment
+              <Button type="button" onClick={completeSetup} disabled={isSubmitting}>
+                {isSubmitting ? 'Starting Assessment...' : 'Start Reading Assessment'}
               </Button>
             </div>
           </div>
