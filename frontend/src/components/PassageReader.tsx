@@ -67,27 +67,42 @@ export default function PassageReader({ passage, studentName, onComplete }: Pass
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
-  // Parse passage into words with their indices
+  // Parse passage into paragraphs and words
   const renderPassage = () => {
-    const words = passage.split(/\s+/);
-    return words.map((word, index) => {
-      const isIncorrect = incorrectWords.has(index);
+    // Split into paragraphs first (split on double newlines)
+    const paragraphs = passage.split(/\n\s*\n/);
+    
+    return paragraphs.map((paragraph, paragraphIndex) => {
+      // Split paragraph into words
+      const words = paragraph.trim().split(/\s+/);
+      
       return (
-        <>
-          <span
-            key={index}
-            onClick={() => handleWordClick(index)}
-            className={`cursor-pointer inline-block transition-colors whitespace-nowrap ${
-              isIncorrect
-                ? 'bg-red-200 text-red-800 px-1 rounded'
-                : 'hover:bg-gray-200 px-1 rounded'
-            }`}
-          >
-            {word}
-          </span>
-          {/* Add a space after each word */}
-          <span className="inline-block">&nbsp;</span>
-        </>
+        <p key={`p-${paragraphIndex}`} className="mb-6 last:mb-0">
+          {words.map((word, wordIndex) => {
+            const globalWordIndex = paragraphs
+              .slice(0, paragraphIndex)
+              .reduce((sum, p) => sum + p.trim().split(/\s+/).length, 0) + wordIndex;
+            
+            const isIncorrect = incorrectWords.has(globalWordIndex);
+            return (
+              <>
+                <span
+                  key={`w-${globalWordIndex}`}
+                  onClick={() => handleWordClick(globalWordIndex)}
+                  className={`cursor-pointer inline-block transition-colors whitespace-nowrap ${
+                    isIncorrect
+                      ? 'bg-red-200 text-red-800 px-1 rounded'
+                      : 'hover:bg-gray-200 px-1 rounded'
+                  }`}
+                >
+                  {word}
+                </span>
+                {/* Add a space after each word */}
+                <span className="inline-block">&nbsp;</span>
+              </>
+            );
+          })}
+        </p>
       );
     });
   };
@@ -146,7 +161,7 @@ export default function PassageReader({ passage, studentName, onComplete }: Pass
 
       {/* Passage Display */}
       <div className="bg-gray-50 rounded-lg p-6">
-        <div className="text-lg leading-relaxed text-gray-900">
+        <div className="text-lg leading-relaxed text-gray-900 max-w-3xl mx-auto">
           {renderPassage()}
         </div>
       </div>
