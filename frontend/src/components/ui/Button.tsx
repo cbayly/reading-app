@@ -1,7 +1,7 @@
 import React from 'react';
 
 type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: 'primary' | 'secondary';
+  variant?: 'primary' | 'secondary' | 'destructive';
 };
 
 export function Button({ className, variant = 'primary', ...props }: ButtonProps) {
@@ -9,6 +9,7 @@ export function Button({ className, variant = 'primary', ...props }: ButtonProps
   const variantClasses = {
     primary: 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500',
     secondary: 'bg-gray-200 text-gray-800 hover:bg-gray-300 focus:ring-gray-500',
+    destructive: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500',
   };
 
   return (

@@ -205,22 +205,41 @@ router.put('/:id/submit', authenticate, async (req, res) => {
     // Calculate reading accuracy as a percentage
     const accuracy = wordCount > 0 ? Math.round(((wordCount - errorCount) / wordCount) * 100) : 0;
 
-    // Calculate comprehension score as a raw value (e.g., 0.75 for 75%)
+    // Calculate comprehension and vocabulary scores separately
     const questions = assessment.questions;
-    let correctAnswers = 0;
+    let comprehensionCorrect = 0;
+    let vocabularyCorrect = 0;
+    let comprehensionTotal = 0;
+    let vocabularyTotal = 0;
+    
     Object.entries(answers).forEach(([index, answer]) => {
-      if (questions[parseInt(index)].correctAnswer === answer) {
-        correctAnswers++;
+      const question = questions[parseInt(index)];
+      if (question.correctAnswer === answer) {
+        if (question.type === 'comprehension') {
+          comprehensionCorrect++;
+        } else if (question.type === 'vocabulary') {
+          vocabularyCorrect++;
+        }
+      }
+      if (question.type === 'comprehension') {
+        comprehensionTotal++;
+      } else if (question.type === 'vocabulary') {
+        vocabularyTotal++;
       }
     });
-    const comprehension = questions.length > 0 ? correctAnswers / questions.length : 0;
-
-    // Calculate composite score with weighted metrics
-    const compositeScore = Math.round(
-      (wpm / 150) * 40 + // 40% weighting for WPM (normalized to 150 WPM)
-      (accuracy / 100) * 30 + // 30% weighting for accuracy
-      comprehension * 30 // 30% weighting for comprehension
-    );
+    
+    const comprehensionScore = comprehensionTotal > 0 ? (comprehensionCorrect / comprehensionTotal) * 100 : 0;
+    const vocabularyScore = vocabularyTotal > 0 ? (vocabularyCorrect / vocabularyTotal) * 100 : 0;
+    
+    // Calculate total comprehension/vocabulary score (max 200 points)
+    const totalCompVocab = comprehensionCorrect + vocabularyCorrect;
+    const compVocabScore = totalCompVocab * 25; // Each correct answer = 25 points
+    
+    // Calculate fluency score (WPM × accuracy as decimal)
+    const fluencyScore = wpm * (accuracy / 100);
+    
+    // Calculate composite score: (fluency × 0.5) + (comp/vocab × 0.5)
+    const compositeScore = Math.round((fluencyScore * 0.5) + (compVocabScore * 0.5));
 
     const updatedAssessment = await prisma.assessment.update({
       where: { id: parseInt(id) },

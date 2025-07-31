@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import '@/styles/print.css';
 
 interface PassageReaderProps {
@@ -86,9 +86,8 @@ export default function PassageReader({ passage, studentName, onComplete }: Pass
             
             const isIncorrect = incorrectWords.has(globalWordIndex);
             return (
-              <>
+              <React.Fragment key={`w-${globalWordIndex}`}>
                 <span
-                  key={`w-${globalWordIndex}`}
                   onClick={() => handleWordClick(globalWordIndex)}
                   className={`cursor-pointer inline-block transition-colors whitespace-nowrap ${
                     isIncorrect
@@ -100,7 +99,7 @@ export default function PassageReader({ passage, studentName, onComplete }: Pass
                 </span>
                 {/* Add a space after each word */}
                 <span className="inline-block">&nbsp;</span>
-              </>
+              </React.Fragment>
             );
           })}
         </p>

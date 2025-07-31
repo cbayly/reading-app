@@ -27,4 +27,14 @@ export const createAssessment = async (studentId: number) => {
   return response.data;
 };
 
+export const deleteStudent = async (studentId: number) => {
+  const response = await api.delete(`/students/${studentId}`);
+  return response.data;
+};
+
+export const updateStudent = async (studentId: number, studentData: any) => {
+  const response = await api.put(`/students/${studentId}`, studentData);
+  return response.data;
+};
+
 export default api;

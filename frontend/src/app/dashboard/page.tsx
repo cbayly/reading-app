@@ -2,15 +2,18 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth';
-import { getAssessments, createAssessment } from '@/lib/api';
+import { getAssessments, createAssessment, deleteStudent, updateStudent } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import EditStudentModal from '@/components/EditStudentModal';
 
 interface Student {
   id: number;
   name: string;
   gradeLevel: number;
+  interests: string;
+  birthday: string;
   assessments: Array<{
     id: number;
     status: string;
@@ -24,7 +27,11 @@ export default function DashboardPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [creatingAssessment, setCreatingAssessment] = useState(false);
+  const [creatingAssessment, setCreatingAssessment] = useState<number | null>(null);
+  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     const fetchStudents = async () => {
@@ -50,6 +57,60 @@ export default function DashboardPage() {
   const handleLogout = () => {
     logout();
     // Redirect will be handled by middleware
+  };
+
+  const handleEditStudent = (student: Student) => {
+    setEditingStudent(student);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setEditingStudent(null);
+  };
+
+  const handleSaveStudent = async (studentId: number, updatedData: Partial<Student>) => {
+    try {
+      setIsSaving(true);
+      await updateStudent(studentId, updatedData);
+      
+      // Update the student in local state
+      setStudents(prev => prev.map(student => 
+        student.id === studentId 
+          ? { ...student, ...updatedData }
+          : student
+      ));
+    } catch (err) {
+      console.error('Error updating student:', err);
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('Failed to update student');
+      }
+      throw err; // Re-throw to let the modal handle it
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteStudent = async (studentId: number, studentName: string) => {
+    try {
+      setIsDeleting(true);
+      await deleteStudent(studentId);
+      
+      // Remove the student from the local state
+      setStudents(prev => prev.filter(student => student.id !== studentId));
+    } catch (err) {
+      console.error('Error deleting student:', err);
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('Failed to delete student');
+      }
+      throw err; // Re-throw to let the modal handle it
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   if (loading) {
@@ -127,9 +188,20 @@ export default function DashboardPage() {
                       <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
                         {student.name}
                       </h3>
-                      <span className="text-sm text-gray-500 dark:text-gray-400">
-                        Grade {student.gradeLevel}
-                      </span>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm text-gray-500 dark:text-gray-400">
+                          Grade {student.gradeLevel}
+                        </span>
+                        <button
+                          onClick={() => handleEditStudent(student)}
+                          className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1"
+                          title="Edit student"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
                     
                     <div className="mb-4">
@@ -158,7 +230,7 @@ export default function DashboardPage() {
                           className="w-full"
                           onClick={async () => {
                             try {
-                              setCreatingAssessment(true);
+                              setCreatingAssessment(student.id);
                               console.log('Starting assessment for student:', student);
                               const { assessment } = await createAssessment(student.id);
                               console.log('Created assessment:', assessment);
@@ -170,12 +242,12 @@ export default function DashboardPage() {
                               } else {
                                 setError('Failed to create assessment');
                               }
-                              setCreatingAssessment(false);
+                              setCreatingAssessment(null);
                             }
                           }}
-                          disabled={creatingAssessment}
+                          disabled={creatingAssessment === student.id}
                         >
-                          {creatingAssessment ? 'Creating Assessment...' : 'Start Assessment'}
+                          {creatingAssessment === student.id ? 'Creating Assessment...' : 'Start Assessment'}
                         </Button>
                       )}
                     </div>
@@ -186,6 +258,17 @@ export default function DashboardPage() {
           </div>
         )}
       </main>
+
+      {/* Edit Student Modal */}
+      <EditStudentModal
+        student={editingStudent}
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        onSave={handleSaveStudent}
+        onDelete={handleDeleteStudent}
+        isSaving={isSaving}
+        isDeleting={isDeleting}
+      />
     </div>
   );
 } 

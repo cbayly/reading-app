@@ -10,37 +10,52 @@ const openai = new OpenAI({
 });
 
 /**
+ * Selects a random interest from the student's interests.
+ * @param {string} interests - Comma-separated string of interests.
+ * @returns {string} - A randomly selected interest.
+ */
+function selectRandomInterest(interests) {
+  const interestList = interests.split(',').map(interest => interest.trim());
+  return interestList[Math.floor(Math.random() * interestList.length)];
+}
+
+/**
  * Constructs the prompt for the OpenAI API to generate an assessment.
  * @param {object} student - The student object from the database.
+ * @param {string} selectedInterest - The randomly selected interest to focus on.
  * @returns {string} - The formatted prompt string.
  */
-function constructPrompt(student) {
+function constructPrompt(student, selectedInterest) {
   const wordCount = 200 + (student.gradeLevel - 1) * 50; // Simple formula to scale word count by grade
 
   return `
     Please generate a short story suitable for a grade ${student.gradeLevel} student.
     The story should be approximately ${wordCount} words long.
-    The topics of the story should be related to the student's interests: ${student.interests}.
+    The story should focus specifically on the topic of: ${selectedInterest}.
     The story must be age-appropriate and engaging.
 
     After the story, please generate 8 multiple-choice questions based on the text:
     - 4 comprehension questions (e.g., main idea, inference, detail retrieval).
-    - 4 vocabulary questions about specific words in the story.
+    - 4 vocabulary questions about specific words in the story. For vocabulary questions, include the sentence or phrase from the passage that contains the vocabulary word in the "context" field.
 
     Return the entire response as a single, valid JSON object. Do not include any text or markdown formatting outside of the JSON object.
     The "options" array should contain four strings with the option text only, without any prefixes like "A.", "B.", etc.
+    For vocabulary questions, include a "context" field with the sentence or phrase from the passage that contains the vocabulary word.
     The JSON object must have the following structure:
     {
       "passage": "The full text of the story...",
       "questions": [
         {
           "type": "comprehension" or "vocabulary",
-          "question": "The full question text...",
+          "text": "The full question text (e.g., 'What did the main character do first?')",
           "options": ["Just the text for option A", "Just the text for option B", "Just the text for option C", "Just the text for option D"],
-          "correctAnswer": "A"
+          "correctAnswer": "A",
+          "context": "For vocabulary questions, include the relevant sentence or phrase from the passage"
         }
       ]
     }
+    
+    IMPORTANT: Make sure each question has a clear, complete question text in the "text" field. The question should be a full sentence that asks what the student needs to answer.
   `;
 }
 
@@ -51,9 +66,12 @@ function constructPrompt(student) {
  */
 export async function generateAssessment(student) {
   try {
-    console.log(`Generating assessment for student: ${student.name}, Grade: ${student.gradeLevel}, Interests: ${student.interests}`);
+    // Select a random interest from the student's interests
+    const selectedInterest = selectRandomInterest(student.interests);
     
-    const prompt = constructPrompt(student);
+    console.log(`Generating assessment for student: ${student.name}, Grade: ${student.gradeLevel}, Selected interest: ${selectedInterest}`);
+    
+    const prompt = constructPrompt(student, selectedInterest);
 
     const response = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',

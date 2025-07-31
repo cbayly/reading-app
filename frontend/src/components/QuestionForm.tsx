@@ -4,7 +4,8 @@ import { useState } from 'react';
 
 interface Question {
   type: 'comprehension' | 'vocabulary';
-  text: string;
+  text?: string;
+  question?: string;
   options: string[];
   correctAnswer: string;
 }
@@ -66,7 +67,7 @@ export default function QuestionForm({ questions, onSubmit }: QuestionFormProps)
       {/* Question */}
       <div>
         <h2 className="text-xl font-semibold text-gray-900 mb-6">
-          {currentQuestion.text}
+          {currentQuestion.text || currentQuestion.question || 'Question text not available'}
         </h2>
         <div className="space-y-4">
           {currentQuestion.options.map((option, index) => {

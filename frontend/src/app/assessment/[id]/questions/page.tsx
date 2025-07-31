@@ -7,7 +7,8 @@ import { Assessment } from '@/types/assessment';
 
 interface Question {
   type: 'comprehension' | 'vocabulary';
-  question: string;
+  text?: string;
+  question?: string;
   options: string[];
   correctAnswer: string;
 }
@@ -178,7 +179,7 @@ export default function AssessmentQuestionsPage() {
           {/* Question */}
           <div className="mb-8">
             <h2 className="text-xl font-semibold text-gray-900 mb-6">
-              {currentQuestion.question}
+              {currentQuestion.text || currentQuestion.question || 'Question text not available'}
             </h2>
             <div className="space-y-4">
               {currentQuestion.options.map((option, index) => {

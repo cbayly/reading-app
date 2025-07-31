@@ -7,16 +7,30 @@ import { Assessment } from '@/types/assessment';
 
 interface Question {
   type: 'comprehension' | 'vocabulary';
-  text: string;
+  text?: string;
+  question?: string; // Alternative field name
   options: string[];
   correctAnswer: string;
+  context?: string; // Quote from the passage
 }
 
 function getGradeEquivalent(compositeScore: number): string {
-  if (compositeScore >= 90) return 'Above Grade Level';
-  if (compositeScore >= 70) return 'At Grade Level';
-  if (compositeScore >= 50) return 'Approaching Grade Level';
+  // Based on typical reading assessment benchmarks
+  if (compositeScore >= 140) return 'Above Grade Level';
+  if (compositeScore >= 120) return 'At Grade Level';
+  if (compositeScore >= 100) return 'Approaching Grade Level';
   return 'Below Grade Level';
+}
+
+function getGradeLevel(compositeScore: number): string {
+  // Determine approximate grade level based on composite score
+  if (compositeScore >= 160) return 'Grade 6+';
+  if (compositeScore >= 140) return 'Grade 5';
+  if (compositeScore >= 120) return 'Grade 4';
+  if (compositeScore >= 100) return 'Grade 3';
+  if (compositeScore >= 80) return 'Grade 2';
+  if (compositeScore >= 60) return 'Grade 1';
+  return 'Kindergarten';
 }
 
 function getStrengthsAndWeaknesses(wpm: number, accuracy: number, comprehensionScore: number) {
@@ -146,10 +160,11 @@ export default function AssessmentResultsPage() {
             100
         )
       : 0;
-  const gradeEquivalent = getGradeEquivalent(assessment.compositeScore);
+  const gradeEquivalent = getGradeEquivalent(assessment.compositeScore || 0);
+  const gradeLevel = getGradeLevel(assessment.compositeScore || 0);
   const { strengths, weaknesses } = getStrengthsAndWeaknesses(
-    assessment.wpm,
-    assessment.accuracy,
+    assessment.wpm || 0,
+    assessment.accuracy || 0,
     comprehensionScore
   );
 
@@ -176,25 +191,43 @@ export default function AssessmentResultsPage() {
         <div className="bg-white rounded-lg shadow-sm border p-8">
           {/* Overall Score */}
           <div className="mb-12 text-center">
-            <div className="inline-block bg-blue-50 rounded-full px-8 py-8 mb-4">
+            <div className="inline-block bg-blue-50 rounded-full px-8 py-8 mb-4 relative group">
               <div className="text-4xl font-bold text-blue-600 mb-1">
-                {Math.round(assessment.compositeScore * 100)}%
+                {assessment.compositeScore || 0}
               </div>
               <div className="text-sm text-blue-800">Composite Score</div>
+              <div className="text-lg font-semibold text-blue-700 mt-1">
+                {gradeLevel}
+              </div>
+              
+              {/* Tooltip */}
+              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
+                <div className="font-semibold mb-1">Composite Score Calculation:</div>
+                <div>• Fluency: {Math.round((assessment.wpm || 0) * (assessment.accuracy || 0) / 100)} (WPM × Accuracy)</div>
+                <div>• Comp/Vocab: {Math.round((comprehensionScore / 100) * 4 * 25)} (Correct answers × 25 points)</div>
+                <div>• Final: ({Math.round((assessment.wpm || 0) * (assessment.accuracy || 0) / 100)} × 0.5) + ({Math.round((comprehensionScore / 100) * 4 * 25)} × 0.5)</div>
+                <div className="border-t border-gray-700 mt-1 pt-1 font-bold">
+                  Total: {assessment.compositeScore || 0}
+                </div>
+                <div className="text-xs mt-1">
+                  Grade Level: {gradeLevel}
+                </div>
+                <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+              </div>
             </div>
             <div className="text-xl font-semibold text-gray-900">
-              {gradeEquivalent}
+              {gradeEquivalent} • {gradeLevel}
             </div>
           </div>
 
           {/* Detailed Metrics */}
           <div className="grid grid-cols-3 gap-6 mb-12">
             <div className="bg-gray-50 rounded-lg p-4 text-center">
-              <div className="text-2xl font-bold text-gray-900 mb-1">{assessment.wpm}</div>
+              <div className="text-2xl font-bold text-gray-900 mb-1">{assessment.wpm || 0}</div>
               <div className="text-sm text-gray-600">Words per Minute</div>
             </div>
             <div className="bg-gray-50 rounded-lg p-4 text-center">
-              <div className="text-2xl font-bold text-gray-900 mb-1">{assessment.accuracy}%</div>
+              <div className="text-2xl font-bold text-gray-900 mb-1">{assessment.accuracy || 0}%</div>
               <div className="text-sm text-gray-600">Reading Accuracy</div>
             </div>
             <div className="bg-gray-50 rounded-lg p-4 text-center">
@@ -266,21 +299,54 @@ export default function AssessmentResultsPage() {
                         {isCorrect ? 'Correct' : 'Incorrect'}
                       </div>
                     </div>
-                    <p className="text-gray-700 mb-2">{question.text}</p>
-                    <div className="text-sm">
-                      <span className="font-medium">Your answer:</span>{' '}
-                      {question.options[answers[index].charCodeAt(0) - 65]}
-                      {!isCorrect && (
-                        <>
-                          <br />
-                          <span className="font-medium">Correct answer:</span>{' '}
-                          {
-                            question.options[
-                              question.correctAnswer.charCodeAt(0) - 65
-                            ]
-                          }
-                        </>
-                      )}
+                    
+                    {/* Question text */}
+                    <p className="text-gray-700 mb-3 font-medium">
+                      {question.text || question.question || 'Question text not available'}
+                    </p>
+                    
+                    {/* Context/quote from passage if available */}
+                    {question.context && (
+                      <div className="bg-gray-100 rounded p-3 mb-3 text-sm">
+                        <div className="font-medium text-gray-600 mb-1">From the passage:</div>
+                        <div className="italic text-gray-700">"{question.context}"</div>
+                      </div>
+                    )}
+                    
+                    {/* Answer options */}
+                    <div className="space-y-2 mb-3">
+                      <div className="text-sm font-medium text-gray-600">Options:</div>
+                      {question.options.map((option, optionIndex) => {
+                        const optionLetter = String.fromCharCode(65 + optionIndex);
+                        const isSelected = answers[index] === optionLetter;
+                        const isCorrectOption = question.correctAnswer === optionLetter;
+                        
+                        return (
+                          <div
+                            key={optionIndex}
+                            className={`text-sm p-2 rounded ${
+                              isSelected && isCorrectOption
+                                ? 'bg-green-200 text-green-800'
+                                : isSelected && !isCorrectOption
+                                ? 'bg-red-200 text-red-800'
+                                : isCorrectOption
+                                ? 'bg-green-100 text-green-700'
+                                : 'bg-gray-100 text-gray-700'
+                            }`}
+                          >
+                            <span className="font-medium">{optionLetter}.</span> {option}
+                            {isSelected && isCorrectOption && (
+                              <span className="ml-2 text-green-600">✓ Your answer (correct)</span>
+                            )}
+                            {isSelected && !isCorrectOption && (
+                              <span className="ml-2 text-red-600">✗ Your answer (incorrect)</span>
+                            )}
+                            {!isSelected && isCorrectOption && (
+                              <span className="ml-2 text-green-600">✓ Correct answer</span>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 );

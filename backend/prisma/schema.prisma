@@ -39,22 +39,33 @@ model Student {
 }
 
 model Assessment {
-  id             Int      @id @default(autoincrement())
-  studentId      Int      @map("student_id")
-  status         String   @default("not_started") // not_started, in_progress, completed, abandoned
-  passage        String?
-  questions      Json?
-  studentAnswers Json?    @map("student_answers")
-  readingTime    Int?     @map("reading_time")
-  errorCount     Int?     @map("error_count")
-  wpm            Float?
-  accuracy       Float?
-  compositeScore Float?   @map("composite_score")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  id                Int      @id @default(autoincrement())
+  studentId         Int      @map("student_id")
+  status            String   @default("not_started") // not_started, in_progress, completed, abandoned
+  passage           String?
+  questions         Json?
+  studentAnswers    Json?    @map("student_answers")
+  readingTime       Int?     @map("reading_time")
+  errorCount        Int?     @map("error_count")
+  wpm               Float?
+  accuracy          Float?
+  compositeScore    Float?   @map("composite_score")
+  fluencyScore      Float?   @map("fluency_score")
+  compVocabScore    Float?   @map("comp_vocab_score")
+  readingLevelLabel String?  @map("reading_level_label")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
   
   // Relations
   student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   
   @@map("assessments")
+}
+
+model Benchmark {
+  id    Int @id @default(autoincrement())
+  grade Int @unique
+  wpm   Int
+  
+  @@map("benchmarks")
 }
