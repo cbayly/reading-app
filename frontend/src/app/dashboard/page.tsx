@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/auth';
 import { getAssessments, createAssessment } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 interface Student {
   id: number;
