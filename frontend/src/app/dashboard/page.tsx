@@ -30,8 +30,10 @@ export default function DashboardPage() {
     const fetchStudents = async () => {
       try {
         const data = await getAssessments();
+        console.log('Fetched students:', data);
         setStudents(data);
       } catch (err) {
+        console.error('Error fetching students:', err);
         if (err instanceof Error) {
           setError(err.message);
         } else {
@@ -157,9 +159,12 @@ export default function DashboardPage() {
                           onClick={async () => {
                             try {
                               setCreatingAssessment(true);
+                              console.log('Starting assessment for student:', student);
                               const { assessment } = await createAssessment(student.id);
+                              console.log('Created assessment:', assessment);
                               router.push(`/assessment/${assessment.id}/intro`);
                             } catch (err) {
+                              console.error('Error creating assessment:', err);
                               if (err instanceof Error) {
                                 setError(err.message);
                               } else {
