@@ -90,65 +90,68 @@ export default function PassageReader({ passage, studentName, onComplete }: Pass
 
   return (
     <div className="space-y-6">
-      {/* Top Controls Row */}
-      <div className="flex justify-between items-center">
-        {/* Start/Pause Button */}
-        <div>
-          {!hasStarted ? (
-            <button
-              onClick={handleStart}
-              className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
-            >
-              Start Reading
-            </button>
-          ) : (
-            <button
-              onClick={handlePause}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                isPaused
-                  ? 'bg-green-600 text-white hover:bg-green-700'
-                  : 'bg-yellow-600 text-white hover:bg-yellow-700'
-              }`}
-            >
-              {isPaused ? 'Resume' : 'Pause'}
-            </button>
-          )}
+      {/* Instructions and Controls Row */}
+      <div className="flex gap-6">
+        {/* Instructions - 2/3 width */}
+        <div className="flex-1 bg-blue-50 border border-blue-200 rounded-lg p-4" style={{ flexBasis: '66.666%' }}>
+          <h3 className="font-semibold text-blue-900 mb-2">Instructions for Parents:</h3>
+          <ul className="text-blue-800 space-y-1 text-sm">
+            <li>• Click "Start Reading" to begin the timer</li>
+            <li>• Have your student read the passage at their own pace</li>
+            <li>• Click any word that is read incorrectly or skipped</li>
+            <li>• Use the pause button if your student needs a break</li>
+            <li>• Click &quot;I&apos;m Done Reading&quot; when they finish</li>
+            <li>• Your student will then answer questions about the passage</li>
+          </ul>
         </div>
 
-        {/* Timer */}
-        <div className="text-center">
-          <div className="text-sm text-gray-500">Reading Time</div>
-          <div className="text-2xl font-mono font-bold text-blue-600">
-            {formatTime(elapsedTime)}
+        {/* Controls Panel - 1/3 width */}
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 flex flex-col items-center justify-center space-y-4" style={{ flexBasis: '33.333%' }}>
+          {/* Timer */}
+          <div className="text-center">
+            <div className="text-sm text-gray-500">Reading Time</div>
+            <div className="text-2xl font-mono font-bold text-blue-600">
+              {formatTime(elapsedTime)}
+            </div>
+          </div>
+
+          {/* Start/Pause Button */}
+          <div>
+            {!hasStarted ? (
+              <button
+                onClick={handleStart}
+                className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+              >
+                Start Reading
+              </button>
+            ) : (
+              <button
+                onClick={handlePause}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  isPaused
+                    ? 'bg-green-600 text-white hover:bg-green-700'
+                    : 'bg-yellow-600 text-white hover:bg-yellow-700'
+                }`}
+              >
+                {isPaused ? 'Resume' : 'Pause'}
+              </button>
+            )}
           </div>
         </div>
-
-        {/* Empty space for balance */}
-        <div></div>
-      </div>
-
-      {/* Instructions */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h3 className="font-semibold text-blue-900 mb-2">Instructions for Parents:</h3>
-        <ul className="text-blue-800 space-y-1 text-sm">
-          <li>• Click "Start Reading" to begin the timer</li>
-          <li>• Have your student read the passage at their own pace</li>
-          <li>• Click any word that is read incorrectly or skipped</li>
-          <li>• Use the pause button if your student needs a break</li>
-          <li>• Click &quot;I&apos;m Done Reading&quot; when they finish</li>
-          <li>• Your student will then answer questions about the passage</li>
-        </ul>
-      </div>
-
-      {/* Reading Instructions */}
-      <div className="text-gray-600 text-center">
-        As {studentName || 'your student'} reads, click on any words that are read incorrectly or skipped.
       </div>
 
       {/* Passage Display */}
       <div className="bg-gray-50 rounded-lg p-6">
         <div className="text-lg leading-relaxed text-gray-900 whitespace-pre-wrap break-words">
           {renderPassage()}
+        </div>
+      </div>
+
+      {/* Error Count */}
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        <div className="flex justify-between items-center">
+          <span className="text-red-800 font-medium">Words Marked as Incorrect:</span>
+          <span className="text-red-800 font-bold text-xl">{incorrectWords.size}</span>
         </div>
       </div>
 
@@ -165,14 +168,6 @@ export default function PassageReader({ passage, studentName, onComplete }: Pass
         >
           I&apos;m Done Reading
         </button>
-      </div>
-
-      {/* Error Count */}
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-        <div className="flex justify-between items-center">
-          <span className="text-red-800 font-medium">Words Marked as Incorrect:</span>
-          <span className="text-red-800 font-bold text-xl">{incorrectWords.size}</span>
-        </div>
       </div>
     </div>
   );
