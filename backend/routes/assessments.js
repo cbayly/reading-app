@@ -205,7 +205,7 @@ router.put('/:id/submit', authenticate, async (req, res) => {
     // Calculate reading accuracy as a percentage
     const accuracy = wordCount > 0 ? Math.round(((wordCount - errorCount) / wordCount) * 100) : 0;
 
-    // Calculate comprehension score (percentage of correct answers)
+    // Calculate comprehension score as a raw value (e.g., 0.75 for 75%)
     const questions = assessment.questions;
     let correctAnswers = 0;
     Object.entries(answers).forEach(([index, answer]) => {
@@ -213,10 +213,14 @@ router.put('/:id/submit', authenticate, async (req, res) => {
         correctAnswers++;
       }
     });
-    const comprehensionScore = Math.round((correctAnswers / questions.length) * 100);
+    const comprehension = questions.length > 0 ? correctAnswers / questions.length : 0;
 
-    // Calculate composite score (simple average of accuracy and comprehension)
-    const compositeScore = Math.round((accuracy + comprehensionScore) / 2);
+    // Calculate composite score with weighted metrics
+    const compositeScore = Math.round(
+      (wpm / 150) * 40 + // 40% weighting for WPM (normalized to 150 WPM)
+      (accuracy / 100) * 30 + // 30% weighting for accuracy
+      comprehension * 30 // 30% weighting for comprehension
+    );
 
     const updatedAssessment = await prisma.assessment.update({
       where: { id: parseInt(id) },

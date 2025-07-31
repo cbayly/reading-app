@@ -28,6 +28,7 @@ function constructPrompt(student) {
     - 4 vocabulary questions about specific words in the story.
 
     Return the entire response as a single, valid JSON object. Do not include any text or markdown formatting outside of the JSON object.
+    The "options" array should contain four strings with the option text only, without any prefixes like "A.", "B.", etc.
     The JSON object must have the following structure:
     {
       "passage": "The full text of the story...",
@@ -35,7 +36,7 @@ function constructPrompt(student) {
         {
           "type": "comprehension" or "vocabulary",
           "question": "The full question text...",
-          "options": ["Option A", "Option B", "Option C", "Option D"],
+          "options": ["Just the text for option A", "Just the text for option B", "Just the text for option C", "Just the text for option D"],
           "correctAnswer": "A"
         }
       ]

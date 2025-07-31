@@ -135,7 +135,17 @@ export default function AssessmentResultsPage() {
       correctAnswers++;
     }
   });
-  const comprehensionScore = correctAnswers / questions.length;
+  const comprehensionScore =
+    assessment.questions && assessment.questions.length > 0
+      ? Math.round(
+          (Object.values(assessment.studentAnswers).filter(
+            (answer, index) =>
+              (assessment.questions as Question[])[index].correctAnswer === answer
+          ).length /
+            assessment.questions.length) *
+            100
+        )
+      : 0;
   const gradeEquivalent = getGradeEquivalent(assessment.compositeScore);
   const { strengths, weaknesses } = getStrengthsAndWeaknesses(
     assessment.wpm,
