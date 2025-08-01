@@ -34,6 +34,7 @@ model Student {
   // Relations
   parent      Parent       @relation(fields: [parentId], references: [id], onDelete: Cascade)
   assessments Assessment[]
+  weeklyPlans WeeklyPlan[]
   
   @@map("students")
 }
@@ -68,4 +69,49 @@ model Benchmark {
   wpm   Int
   
   @@map("benchmarks")
+}
+
+model WeeklyPlan {
+  id            Int      @id @default(autoincrement())
+  studentId     Int      @map("student_id")
+  interestTheme String   @map("interest_theme")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  // Relations
+  student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  chapters      Chapter[]
+  dailyActivities DailyActivity[]
+  
+  @@map("weekly_plans")
+}
+
+model Chapter {
+  id            Int      @id @default(autoincrement())
+  planId        Int      @map("plan_id")
+  chapterNumber Int      @map("chapter_number")
+  title         String
+  content       String
+  summary       String
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  // Relations
+  plan          WeeklyPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  
+  @@map("chapters")
+}
+
+model DailyActivity {
+  id             Int      @id @default(autoincrement())
+  planId         Int      @map("plan_id")
+  dayOfWeek      Int      @map("day_of_week") // 1-7
+  activityType   String   @map("activity_type") // e.g., 'Comprehension', 'Vocabulary', 'Game'
+  content        Json     // Questions/prompts for the activity
+  studentResponse Json?   @map("student_response") // Student's answers/responses
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  plan           WeeklyPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  
+  @@map("daily_activities")
 }

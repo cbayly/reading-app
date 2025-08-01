@@ -34,35 +34,92 @@ async function main() {
     where: { name: 'Cam' }
   })).id;
 
-  // Create 3 new students using Office characters
-  const newStudents = await prisma.student.createMany({
-    data: [
-      {
-        parentId: parentId,
-        name: 'Angela Martin',
-        birthday: new Date('2012-06-25'), // 12 years old
-        gradeLevel: 6,
-        interests: 'cats,religion,organization,accounting'
-      },
-      {
-        parentId: parentId,
-        name: 'Kevin Malone',
-        birthday: new Date('2010-11-01'), // 14 years old
-        gradeLevel: 8,
-        interests: 'cooking,music,drums,chili'
-      },
-      {
-        parentId: parentId,
-        name: 'Oscar Martinez',
-        birthday: new Date('2011-03-15'), // 13 years old
-        gradeLevel: 7,
-        interests: 'politics,finance,education,debate'
-      }
-    ]
-  });
+  // Create Office characters (including existing ones and new ones)
+  const officeStudents = [
+    {
+      name: 'Angela Martin',
+      birthday: new Date('2012-06-25'), // 12 years old
+      gradeLevel: 6,
+      interests: 'cats,religion,organization,accounting'
+    },
+    {
+      name: 'Kevin Malone',
+      birthday: new Date('2010-11-01'), // 14 years old
+      gradeLevel: 8,
+      interests: 'cooking,music,drums,chili'
+    },
+    {
+      name: 'Oscar Martinez',
+      birthday: new Date('2011-03-15'), // 13 years old
+      gradeLevel: 7,
+      interests: 'politics,finance,education,debate'
+    },
+    {
+      name: 'Kelly Kapoor',
+      birthday: new Date('2013-02-14'), // 11 years old
+      gradeLevel: 5,
+      interests: 'fashion,celebrity gossip,shopping,boys'
+    },
+    {
+      name: 'Toby Flenderson',
+      birthday: new Date('2009-08-22'), // 15 years old
+      gradeLevel: 9,
+      interests: 'books,writing,peace,conflict resolution'
+    },
+    {
+      name: 'Stanley Hudson',
+      birthday: new Date('2008-12-15'), // 16 years old
+      gradeLevel: 10,
+      interests: 'crossword puzzles,quiet time,pretzels'
+    },
+    {
+      name: 'Phyllis Vance',
+      birthday: new Date('2010-04-30'), // 14 years old
+      gradeLevel: 8,
+      interests: 'gardening,knitting,office gossip'
+    },
+    {
+      name: 'Creed Bratton',
+      birthday: new Date('2007-11-02'), // 17 years old
+      gradeLevel: 11,
+      interests: 'music,memories,mysterious past'
+    },
+    {
+      name: 'Meredith Palmer',
+      birthday: new Date('2009-07-10'), // 15 years old
+      gradeLevel: 9,
+      interests: 'parties,alcohol,supplier discounts'
+    },
+    {
+      name: 'Ryan Howard',
+      birthday: new Date('2011-09-05'), // 13 years old
+      gradeLevel: 7,
+      interests: 'technology,entrepreneurship,startups'
+    }
+  ];
 
-  console.log(`✅ Created ${newStudents.count} new students for Cam`);
-  
+  // Create students one by one to avoid duplicates
+  for (const studentData of officeStudents) {
+    const existingStudent = await prisma.student.findFirst({
+      where: {
+        parentId: parentId,
+        name: studentData.name
+      }
+    });
+
+    if (!existingStudent) {
+      await prisma.student.create({
+        data: {
+          parentId: parentId,
+          ...studentData
+        }
+      });
+      console.log(`✅ Created student: ${studentData.name}`);
+    } else {
+      console.log(`⏭️  Student already exists: ${studentData.name}`);
+    }
+  }
+
   // List all students for Cam
   const allStudents = await prisma.student.findMany({
     where: { parentId: parentId },

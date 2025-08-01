@@ -234,13 +234,13 @@ router.put('/:id/submit', authenticate, async (req, res) => {
       });
     }
 
-    const wpm = wordCount / minutes;
+    const wpm = Math.round(wordCount / minutes);
     const accuracyPercent = ((wordCount - errorCount) / wordCount) * 100;
 
     // Calculate fluency score
     const fluencyNormalized = (wpm / benchmark.wpm) * 100;
     const cappedFluencyNormalized = Math.min(fluencyNormalized, 150);
-    const fluencyScore = cappedFluencyNormalized * (accuracyPercent / 100);
+    const fluencyScore = Math.round(cappedFluencyNormalized * (accuracyPercent / 100));
 
     // Calculate comprehension and vocabulary scores
     const questions = assessment.questions;
