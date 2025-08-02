@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import EditStudentModal from '@/components/EditStudentModal';
+import AssessmentLoadingScreen from '@/components/AssessmentLoadingScreen';
 
 interface Student {
   id: number;
@@ -32,6 +33,9 @@ export default function DashboardPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showLoadingScreen, setShowLoadingScreen] = useState(false);
+  const [loadingStudentName, setLoadingStudentName] = useState('');
+  const [createdAssessmentId, setCreatedAssessmentId] = useState<number | null>(null);
 
   useEffect(() => {
     const fetchStudents = async () => {
@@ -240,18 +244,22 @@ export default function DashboardPage() {
                           onClick={async () => {
                             try {
                               setCreatingAssessment(student.id);
+                              setLoadingStudentName(student.name);
+                              setShowLoadingScreen(true);
                               console.log('Starting assessment for student:', student);
                               const { assessment } = await createAssessment(student.id);
                               console.log('Created assessment:', assessment);
-                              router.push(`/assessment/${assessment.id}/intro`);
+                              setCreatedAssessmentId(assessment.id);
+                              // Loading screen will handle the transition
                             } catch (err) {
                               console.error('Error creating assessment:', err);
+                              setShowLoadingScreen(false);
+                              setCreatingAssessment(null);
                               if (err instanceof Error) {
                                 setError(err.message);
                               } else {
                                 setError('Failed to create assessment');
                               }
-                              setCreatingAssessment(null);
                             }
                           }}
                           disabled={creatingAssessment === student.id}
@@ -277,6 +285,21 @@ export default function DashboardPage() {
         onDelete={handleDeleteStudent}
         isSaving={isSaving}
         isDeleting={isDeleting}
+      />
+
+      {/* Assessment Loading Screen */}
+      <AssessmentLoadingScreen
+        studentName={loadingStudentName}
+        isVisible={showLoadingScreen}
+        onComplete={() => {
+          setShowLoadingScreen(false);
+          setCreatingAssessment(null);
+          // Navigate to the assessment intro after loading completes
+          if (createdAssessmentId) {
+            router.push(`/assessment/${createdAssessmentId}/intro`);
+            setCreatedAssessmentId(null);
+          }
+        }}
       />
     </div>
   );

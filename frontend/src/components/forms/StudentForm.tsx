@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { FormInput } from '@/components/ui/FormInput';
 import { createAssessment } from '@/lib/api';
 import api from '@/lib/api';
+import AssessmentLoadingScreen from '@/components/AssessmentLoadingScreen';
 
 interface StudentData {
   name: string;
@@ -26,6 +27,9 @@ export function StudentForm() {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [newStudentId, setNewStudentId] = useState<number | null>(null);
+  const [showLoadingScreen, setShowLoadingScreen] = useState(false);
+  const [loadingStudentName, setLoadingStudentName] = useState('');
+  const [createdAssessmentId, setCreatedAssessmentId] = useState<number | null>(null);
   const router = useRouter();
 
   // Calculate grade level based on birthday
@@ -111,15 +115,19 @@ export function StudentForm() {
     }
     setIsSubmitting(true);
     try {
+      setLoadingStudentName(currentStudent.name);
+      setShowLoadingScreen(true);
       const { assessment } = await createAssessment(newStudentId);
-      router.push(`/assessment/${assessment.id}/intro`);
+      setCreatedAssessmentId(assessment.id);
+      // Loading screen will handle the transition
     } catch (err) {
+      setShowLoadingScreen(false);
+      setIsSubmitting(false);
       if (err instanceof Error) {
         setError(err.message);
       } else {
         setError('Failed to create assessment.');
       }
-      setIsSubmitting(false);
     }
   };
 
@@ -270,6 +278,21 @@ export function StudentForm() {
           </div>
         )}
       </form>
+
+      {/* Assessment Loading Screen */}
+      <AssessmentLoadingScreen
+        studentName={loadingStudentName}
+        isVisible={showLoadingScreen}
+        onComplete={() => {
+          setShowLoadingScreen(false);
+          setIsSubmitting(false);
+          // Navigate to the assessment intro after loading completes
+          if (createdAssessmentId) {
+            router.push(`/assessment/${createdAssessmentId}/intro`);
+            setCreatedAssessmentId(null);
+          }
+        }}
+      />
     </div>
   );
 } 
