@@ -67,6 +67,7 @@ export default function AssessmentResultsPage() {
   const [assessment, setAssessment] = useState<Assessment | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showQuestionAnalysis, setShowQuestionAnalysis] = useState(false);
 
   useEffect(() => {
     const fetchAssessment = async () => {
@@ -299,82 +300,126 @@ export default function AssessmentResultsPage() {
 
           {/* Question Analysis */}
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Question Analysis
-            </h3>
-            <div className="space-y-4">
-              {questions.map((question, index) => {
-                const isCorrect = answers[index] === question.correctAnswer;
-                return (
-                  <div
-                    key={index}
-                    className={`p-4 rounded-lg ${
-                      isCorrect ? 'bg-green-50' : 'bg-red-50'
-                    }`}
+            {(() => {
+              const correctAnswers = questions.filter((question, index) => 
+                answers[index] === question.correctAnswer
+              ).length;
+              const totalQuestions = questions.length;
+              
+              return (
+                <>
+                  <button
+                    onClick={() => setShowQuestionAnalysis(!showQuestionAnalysis)}
+                    className="w-full flex justify-between items-center text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors mb-4"
                   >
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="font-medium">Question {index + 1}</div>
-                      <div
-                        className={`text-sm font-medium ${
-                          isCorrect ? 'text-green-700' : 'text-red-700'
-                        }`}
-                      >
-                        {isCorrect ? 'Correct' : 'Incorrect'}
-                      </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        Question Analysis
+                      </h3>
+                      <p className="text-sm text-gray-600 mt-1">
+                        {correctAnswers} of {totalQuestions} questions answered correctly
+                      </p>
                     </div>
-                    
-                    {/* Question text */}
-                    <p className="text-gray-700 mb-3 font-medium">
-                      {question.text || question.question || 'Question text not available'}
-                    </p>
-                    
-                    {/* Context/quote from passage if available */}
-                    {question.context && (
-                      <div className="bg-gray-100 rounded p-3 mb-3 text-sm">
-                        <div className="font-medium text-gray-600 mb-1">From the passage:</div>
-                        <div className="italic text-gray-700">"{question.context}"</div>
-                      </div>
-                    )}
-                    
-                    {/* Answer options */}
-                    <div className="space-y-2 mb-3">
-                      <div className="text-sm font-medium text-gray-600">Options:</div>
-                      {question.options.map((option, optionIndex) => {
-                        const optionLetter = String.fromCharCode(65 + optionIndex);
-                        const isSelected = answers[index] === optionLetter;
-                        const isCorrectOption = question.correctAnswer === optionLetter;
-                        
+                    <div className="flex items-center text-gray-500">
+                      <span className="text-sm mr-2">
+                        {showQuestionAnalysis ? 'Hide' : 'Show'} Details
+                      </span>
+                      <svg
+                        className={`w-5 h-5 transition-transform ${
+                          showQuestionAnalysis ? 'rotate-180' : ''
+                        }`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M19 9l-7 7-7-7"
+                        />
+                      </svg>
+                    </div>
+                  </button>
+                  
+                  {showQuestionAnalysis && (
+                    <div className="space-y-4">
+                      {questions.map((question, index) => {
+                        const isCorrect = answers[index] === question.correctAnswer;
                         return (
                           <div
-                            key={optionIndex}
-                            className={`text-sm p-2 rounded ${
-                              isSelected && isCorrectOption
-                                ? 'bg-green-200 text-green-800'
-                                : isSelected && !isCorrectOption
-                                ? 'bg-red-200 text-red-800'
-                                : isCorrectOption
-                                ? 'bg-green-100 text-green-700'
-                                : 'bg-gray-100 text-gray-700'
+                            key={index}
+                            className={`p-4 rounded-lg ${
+                              isCorrect ? 'bg-green-50' : 'bg-red-50'
                             }`}
                           >
-                            <span className="font-medium">{optionLetter}.</span> {option}
-                            {isSelected && isCorrectOption && (
-                              <span className="ml-2 text-green-600">✓ Your answer (correct)</span>
+                            <div className="flex justify-between items-start mb-2">
+                              <div className="font-medium">Question {index + 1}</div>
+                              <div
+                                className={`text-sm font-medium ${
+                                  isCorrect ? 'text-green-700' : 'text-red-700'
+                                }`}
+                              >
+                                {isCorrect ? 'Correct' : 'Incorrect'}
+                              </div>
+                            </div>
+                            
+                            {/* Question text */}
+                            <p className="text-gray-700 mb-3 font-medium">
+                              {question.text || question.question || 'Question text not available'}
+                            </p>
+                            
+                            {/* Context/quote from passage if available */}
+                            {question.context && (
+                              <div className="bg-gray-100 rounded p-3 mb-3 text-sm">
+                                <div className="font-medium text-gray-600 mb-1">From the passage:</div>
+                                <div className="italic text-gray-700">"{question.context}"</div>
+                              </div>
                             )}
-                            {isSelected && !isCorrectOption && (
-                              <span className="ml-2 text-red-600">✗ Your answer (incorrect)</span>
-                            )}
-                            {!isSelected && isCorrectOption && (
-                              <span className="ml-2 text-green-600">✓ Correct answer</span>
-                            )}
+                            
+                            {/* Answer options */}
+                            <div className="space-y-2 mb-3">
+                              <div className="text-sm font-medium text-gray-600">Options:</div>
+                              {question.options.map((option, optionIndex) => {
+                                const optionLetter = String.fromCharCode(65 + optionIndex);
+                                const isSelected = answers[index] === optionLetter;
+                                const isCorrectOption = question.correctAnswer === optionLetter;
+                                
+                                return (
+                                  <div
+                                    key={optionIndex}
+                                    className={`text-sm p-2 rounded ${
+                                      isSelected && isCorrectOption
+                                        ? 'bg-green-200 text-green-800'
+                                        : isSelected && !isCorrectOption
+                                        ? 'bg-red-200 text-red-800'
+                                        : isCorrectOption
+                                        ? 'bg-green-100 text-green-700'
+                                        : 'bg-gray-100 text-gray-700'
+                                    }`}
+                                  >
+                                    <span className="font-medium">{optionLetter}.</span> {option}
+                                    {isSelected && isCorrectOption && (
+                                      <span className="ml-2 text-green-600">✓ Your answer (correct)</span>
+                                    )}
+                                    {isSelected && !isCorrectOption && (
+                                      <span className="ml-2 text-red-600">✗ Your answer (incorrect)</span>
+                                    )}
+                                    {!isSelected && isCorrectOption && (
+                                      <span className="ml-2 text-green-600">✓ Correct answer</span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
                           </div>
                         );
                       })}
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         </div>
       </div>
