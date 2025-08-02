@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/lib/auth';
 import { getAssessments, createAssessment, deleteStudent, updateStudent } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
@@ -312,7 +312,7 @@ export default function DashboardPage() {
       <AssessmentLoadingScreen
         studentName={loadingStudentName}
         isVisible={showLoadingScreen}
-        onComplete={() => {
+        onComplete={useCallback(() => {
           console.log('Loading screen onComplete called');
           console.log('Current createdAssessmentId:', createdAssessmentId);
           console.log('Current creatingAssessment:', creatingAssessment);
@@ -329,7 +329,7 @@ export default function DashboardPage() {
             console.error('State at completion:', { createdAssessmentId, creatingAssessment });
             setError('Failed to create assessment. Please try again.');
           }
-        }}
+        }, [createdAssessmentId, creatingAssessment, router])}
       />
     </div>
   );
