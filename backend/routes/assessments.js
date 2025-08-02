@@ -2,12 +2,13 @@ import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authenticate } from '../middleware/auth.js';
 import { generateAssessment } from '../lib/openai.js';
+import { modelOverrideMiddleware, getModelConfigWithOverride } from '../middleware/modelOverride.js';
 
 const router = express.Router();
 const prisma = new PrismaClient();
 
 // POST /api/assessments
-router.post('/', authenticate, async (req, res) => {
+router.post('/', authenticate, modelOverrideMiddleware(), async (req, res) => {
   const { studentId } = req.body;
   const parentId = req.user.id;
 
@@ -46,8 +47,9 @@ router.post('/', authenticate, async (req, res) => {
       });
     }
 
-    // Generate new assessment content from OpenAI
-    const assessmentContent = await generateAssessment(student);
+    // Generate new assessment content from OpenAI with model override if provided
+    const modelOverride = req.modelOverride ? req.applyModelOverride('assessment_creation', getModelConfigWithOverride(req, 'assessment_creation')) : null;
+    const assessmentContent = await generateAssessment(student, modelOverride);
 
     // Create new assessment in the database
     const assessment = await prisma.assessment.create({

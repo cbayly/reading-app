@@ -2,6 +2,7 @@ import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authenticate } from '../middleware/auth.js';
 import { generateStoryOnly, generateActivityWithFallback } from '../lib/openai.js';
+import { modelOverrideMiddleware, getModelConfigWithOverride } from '../middleware/modelOverride.js';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -492,7 +493,7 @@ const ERROR_HANDLERS = {
 };
 
 // POST /api/plans/generate
-router.post('/generate', authenticate, async (req, res) => {
+router.post('/generate', authenticate, modelOverrideMiddleware(), async (req, res) => {
   const { studentId } = req.body;
   const parentId = req.user.id;
 
@@ -532,9 +533,10 @@ router.post('/generate', authenticate, async (req, res) => {
       });
     }
 
-    // Generate story-only weekly plan content
+    // Generate story-only weekly plan content with model override if provided
     console.log('Generating story-only weekly plan for student:', student.name);
-    const weeklyPlanData = await generateStoryOnly(student);
+    const modelOverride = req.modelOverride ? req.applyModelOverride('story_creation', getModelConfigWithOverride(req, 'story_creation')) : null;
+    const weeklyPlanData = await generateStoryOnly(student, modelOverride);
 
     // Create new weekly plan in the database (without activities)
     const weeklyPlan = await prisma.weeklyPlan.create({
@@ -718,7 +720,7 @@ router.get('/:studentId', authenticate, async (req, res) => {
 });
 
 // POST /api/plans/activity/generate
-router.post('/activity/generate', authenticate, validateSequentialAccess, async (req, res) => {
+router.post('/activity/generate', authenticate, validateSequentialAccess, modelOverrideMiddleware(), async (req, res) => {
   const { planId, dayOfWeek } = req.body;
   const parentId = req.user.id;
 
@@ -764,8 +766,9 @@ router.post('/activity/generate', authenticate, validateSequentialAccess, async 
 
     console.log(`Generating on-demand activity for plan ${planId}, day ${dayOfWeek}`);
     
-    // Generate the activity using the fallback system
-    const activityData = await generateActivityWithFallback(plan.student, plan, parseInt(dayOfWeek));
+    // Generate the activity using the fallback system with model override if provided
+    const modelOverride = req.modelOverride ? req.applyModelOverride('daily_task_generation', getModelConfigWithOverride(req, 'daily_task_generation')) : null;
+    const activityData = await generateActivityWithFallback(plan.student, plan, parseInt(dayOfWeek), modelOverride);
 
     // Save the generated activity to the database
     const newActivity = await prisma.dailyActivity.create({

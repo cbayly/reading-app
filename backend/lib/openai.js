@@ -532,7 +532,7 @@ JSON STRUCTURE (copy exactly):
  * @param {object} student - The student object from the database.
  * @returns {Promise<object>} - A promise that resolves to an object containing comprehension questions.
  */
-export async function generateComprehensionQuestions(chapterText, student) {
+export async function generateComprehensionQuestions(chapterText, student, modelOverride = null) {
   try {
     // Get the most recent assessment to determine reading level
     const mostRecentAssessment = await getMostRecentAssessment(student.id);
@@ -578,7 +578,7 @@ Return the entire response as a single, valid JSON object with the following str
 }
 `;
 
-    const modelConfig = getModelConfig(CONTENT_TYPES.DAILY_TASK_GENERATION);
+    const modelConfig = modelOverride || getModelConfig(CONTENT_TYPES.DAILY_TASK_GENERATION);
     
     const aiFunction = async () => {
       return await openai.chat.completions.create({
@@ -645,9 +645,10 @@ Return the entire response as a single, valid JSON object with the following str
  * Generates vocabulary activities for a chapter.
  * @param {string} chapterText - The text content of the chapter.
  * @param {object} student - The student object from the database.
+ * @param {object} modelOverride - Optional model override configuration
  * @returns {Promise<object>} - A promise that resolves to an object containing vocabulary activities.
  */
-export async function generateVocabularyActivities(chapterText, student) {
+export async function generateVocabularyActivities(chapterText, student, modelOverride = null) {
   try {
     // Get the most recent assessment to determine reading level
     const mostRecentAssessment = await getMostRecentAssessment(student.id);
@@ -725,7 +726,7 @@ Return the entire response as a single, valid JSON object with the following str
 }
 `;
 
-    const modelConfig = getModelConfig(CONTENT_TYPES.DAILY_TASK_GENERATION);
+    const modelConfig = modelOverride || getModelConfig(CONTENT_TYPES.DAILY_TASK_GENERATION);
     
     const aiFunction = async () => {
       return await openai.chat.completions.create({
@@ -794,7 +795,7 @@ Return the entire response as a single, valid JSON object with the following str
  * @param {object} student - The student object from the database.
  * @returns {Promise<object>} - A promise that resolves to an object containing activities for days 4-7.
  */
-export async function generateGameAndCreativeActivities(story, student) {
+export async function generateGameAndCreativeActivities(story, student, modelOverride = null) {
   try {
     // Get the most recent assessment to determine reading level
     const mostRecentAssessment = await getMostRecentAssessment(student.id);
@@ -929,7 +930,7 @@ Return the entire response as a single, valid JSON object with the following str
 }
 `;
 
-    const modelConfig = getModelConfig(CONTENT_TYPES.DAILY_TASK_GENERATION);
+    const modelConfig = modelOverride || getModelConfig(CONTENT_TYPES.DAILY_TASK_GENERATION);
     
     const aiFunction = async () => {
       return await openai.chat.completions.create({
@@ -995,7 +996,7 @@ Return the entire response as a single, valid JSON object with the following str
  * @param {object} student - The student object from the database.
  * @returns {Promise<object>} - A promise that resolves to the complete weekly plan data structure.
  */
-export async function generateStoryOnly(student) {
+export async function generateStoryOnly(student, modelOverride = null) {
   try {
     console.log(`Starting story-only generation for student: ${student.name}`);
     
@@ -1028,7 +1029,7 @@ export async function generateStoryOnly(student) {
   }
 }
 
-export async function generateDayActivity(student, plan, dayOfWeek) {
+export async function generateDayActivity(student, plan, dayOfWeek, modelOverride = null) {
   try {
     console.log(`Generating Day ${dayOfWeek} activity for student: ${student.name}`);
     
@@ -1047,8 +1048,8 @@ export async function generateDayActivity(student, plan, dayOfWeek) {
         activityType = 'Story Kickoff';
         
         // Generate comprehension and vocabulary activities for Chapter 1
-        const day1Comprehension = await generateComprehensionQuestions(targetChapter.content, student);
-        const day1Vocabulary = await generateVocabularyActivities(targetChapter.content, student);
+        const day1Comprehension = await generateComprehensionQuestions(targetChapter.content, student, modelOverride);
+        const day1Vocabulary = await generateVocabularyActivities(targetChapter.content, student, modelOverride);
         
         content = {
           predictionWarmUp: {
@@ -1076,8 +1077,8 @@ export async function generateDayActivity(student, plan, dayOfWeek) {
         targetChapter = chapters[1];
         activityType = 'Building Connections';
         
-        const day2Comprehension = await generateComprehensionQuestions(targetChapter.content, student);
-        const day2Vocabulary = await generateVocabularyActivities(targetChapter.content, student);
+        const day2Comprehension = await generateComprehensionQuestions(targetChapter.content, student, modelOverride);
+        const day2Vocabulary = await generateVocabularyActivities(targetChapter.content, student, modelOverride);
         
         content = {
           chapter1Review: {
@@ -1109,8 +1110,8 @@ export async function generateDayActivity(student, plan, dayOfWeek) {
         targetChapter = chapters[2];
         activityType = 'Story Climax';
         
-        const day3Comprehension = await generateComprehensionQuestions(targetChapter.content, student);
-        const day3Vocabulary = await generateVocabularyActivities(targetChapter.content, student);
+        const day3Comprehension = await generateComprehensionQuestions(targetChapter.content, student, modelOverride);
+        const day3Vocabulary = await generateVocabularyActivities(targetChapter.content, student, modelOverride);
         
         content = {
           chapter2Review: {
@@ -2193,7 +2194,7 @@ const CACHE_UTILS = {
  * @param {number} dayOfWeek - The day of the week (1-7)
  * @returns {object} - Generated activity object
  */
-export async function generateActivityWithFallback(student, plan, dayOfWeek) {
+export async function generateActivityWithFallback(student, plan, dayOfWeek, modelOverride = null) {
   let attempt = 1;
   const maxAttempts = 2; // Try original generation twice
   
@@ -2201,7 +2202,7 @@ export async function generateActivityWithFallback(student, plan, dayOfWeek) {
   while (attempt <= maxAttempts) {
     try {
       console.log(`Attempt ${attempt}: Generating Day ${dayOfWeek} activity via AI...`);
-      const activity = await generateDayActivity(student, plan, dayOfWeek);
+      const activity = await generateDayActivity(student, plan, dayOfWeek, modelOverride);
       
       // Validate the generated activity
       const validation = validateActivityQuality(activity, dayOfWeek);
@@ -2405,7 +2406,7 @@ export async function generateFullWeeklyPlan(student) {
  * @param {object} student - The student object from the database.
  * @returns {Promise<object>} - A promise that resolves to an object containing the passage and questions.
  */
-export async function generateAssessment(student) {
+export async function generateAssessment(student, modelOverride = null) {
   try {
     // Get the most recent assessment to determine reading level
     const mostRecentAssessment = await getMostRecentAssessment(student.id);
@@ -2430,7 +2431,7 @@ export async function generateAssessment(student) {
     
     const prompt = constructPrompt(student, selectedInterest, adjustedGradeLevel);
 
-    const modelConfig = getModelConfig(CONTENT_TYPES.ASSESSMENT_CREATION);
+    const modelConfig = modelOverride || getModelConfig(CONTENT_TYPES.ASSESSMENT_CREATION);
     
     const aiFunction = async () => {
       return await openai.chat.completions.create({
