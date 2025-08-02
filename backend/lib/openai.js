@@ -170,42 +170,64 @@ export async function generateStory(student, interest) {
 You are an expert children's reading specialist and storyteller. 
 Generate a 3-chapter short story for a student.
 
-Requirements:
+⚠️ CRITICAL REQUIREMENTS - READ CAREFULLY ⚠️:
+1. LENGTH:
+   - Each chapter MUST contain between 300 and 500 words.
+   - Do not stop writing until the minimum word count is reached.
+   - If the chapter is under 300 words, regenerate until it meets the requirement.
+
+2. NARRATIVE HOOKS & ENGAGEMENT:
+   - Begin each chapter with an exciting hook that draws the reader in.
+   - Include vivid sensory details (sight, sound, touch, smell, taste).
+   - Use at least 3 pieces of age-appropriate dialogue in each chapter.
+   - Chapters 1 and 2 MUST end with a suspenseful cliffhanger.
+
+3. RELATABLE PROTAGONIST:
+   - The main character must be 1–3 years older than the student.
+   - If the student is in elementary school, the protagonist should be a relatable child.
+   - If the student is in middle or high school, the protagonist may be a teenager.
+   - The protagonist must have clear goals, show emotions, make decisions, and face challenges in every chapter.
+
+4. INTEREST THEME:
+   - The ENTIRE story MUST be centered around and focused on: ${interest}.
+   - ${interest} should drive the conflicts, challenges, and resolutions in every chapter.
+   - Do not drift into unrelated topics.
+
+5. ENGAGEMENT CHECKLIST:
+   - After each chapter, internally confirm in a hidden line (which will not be shown to the student):
+     "Checklist: Met word count, included vivid details, dialogue, and (if Chapters 1 or 2) a cliffhanger."
+   - Then provide the 1-sentence summary for the chapter.
+
+ADDITIONAL DETAILS:
 - Audience: A ${studentAge}-year-old student in grade ${student.gradeLevel}.
 - Reading Level: Chapter 1 should be at the student's current reading level: ${adjustedGradeLevel}. 
   Chapters 2 and 3 should be approximately ½ a level higher.
-- Interest Theme: The story should be about ${interest}.
-- Word Reinforcement: Incorporate the following words naturally in the story, ensuring they appear 
-  multiple times for practice: ${incorrectWords || 'grade-appropriate vocabulary'}.
-- Engagement:
-  - Each chapter should be 300–500 words.
-  - Chapters 1 and 2 must end with a cliffhanger.
-  - Include vivid descriptions and age-appropriate dialogue.
-- Tone: Fun, engaging, encouraging, while slightly challenging.
-- Output: Divide clearly into "Chapter 1," "Chapter 2," and "Chapter 3."
+- Word Reinforcement: Use the following words naturally AT LEAST 3 times per chapter: ${incorrectWords || 'grade-appropriate vocabulary'}.
+- Tone: Fun, engaging, encouraging, and slightly challenging.
+- Output: Respond ONLY with a valid JSON object in the following format. Do not include any explanation outside the JSON.
 
-At the end of each chapter, output a 1-sentence summary labeled as "Chapter Summary."
+⚠️ FINAL REMINDER: Each chapter MUST be 300-500 words. Count your words carefully! ⚠️
 
-Return the entire response as a single, valid JSON object with the following structure:
+JSON STRUCTURE:
 {
   "chapters": [
     {
       "chapterNumber": 1,
       "title": "Chapter Title",
-      "content": "Chapter content...",
-      "summary": "Chapter summary..."
+      "content": "Full chapter content...",
+      "summary": "1-sentence summary"
     },
     {
       "chapterNumber": 2,
-      "title": "Chapter Title", 
-      "content": "Chapter content...",
-      "summary": "Chapter summary..."
+      "title": "Chapter Title",
+      "content": "Full chapter content...",
+      "summary": "1-sentence summary"
     },
     {
       "chapterNumber": 3,
       "title": "Chapter Title",
-      "content": "Chapter content...", 
-      "summary": "Chapter summary..."
+      "content": "Full chapter content...",
+      "summary": "1-sentence summary"
     }
   ]
 }
@@ -215,7 +237,8 @@ Return the entire response as a single, valid JSON object with the following str
       model: 'gpt-3.5-turbo',
       messages: [{ role: 'user', content: storyPrompt }],
       response_format: { type: 'json_object' },
-      temperature: 0.7,
+      temperature: 0.8,
+      max_tokens: 4000,
     });
 
     const content = response.choices[0].message.content;
@@ -226,6 +249,41 @@ Return the entire response as a single, valid JSON object with the following str
 
     // Parse the JSON string into an object
     const storyData = JSON.parse(content);
+    
+    // Validate chapter lengths
+    let needsRegeneration = false;
+    storyData.chapters.forEach((chapter, index) => {
+      const wordCount = chapter.content.split(' ').length;
+      console.log(`Chapter ${index + 1} word count: ${wordCount}`);
+      if (wordCount < 300) {
+        console.warn(`Chapter ${index + 1} is too short (${wordCount} words). Minimum required: 300 words.`);
+        needsRegeneration = true;
+      }
+    });
+    
+    if (needsRegeneration) {
+      console.log('Regenerating story due to insufficient chapter length...');
+      // Add a more explicit instruction to the prompt
+      const regenerationPrompt = storyPrompt + '\n\nCRITICAL: The previous response was too short. Each chapter MUST be between 300-500 words. Do not stop writing until you reach the minimum word count.';
+      
+      const regenerationResponse = await openai.chat.completions.create({
+        model: 'gpt-3.5-turbo',
+        messages: [{ role: 'user', content: regenerationPrompt }],
+        response_format: { type: 'json_object' },
+        temperature: 0.8,
+        max_tokens: 4000,
+      });
+      
+      const regenerationContent = regenerationResponse.choices[0].message.content;
+      if (regenerationContent) {
+        const regeneratedStoryData = JSON.parse(regenerationContent);
+        console.log(`Successfully regenerated 3-chapter story for student: ${student.name}`);
+        console.log(`- Interest Theme: ${interest}`);
+        console.log(`- Adjusted Grade Level: ${adjustedGradeLevel}`);
+        console.log(`- Chapters Generated: ${regeneratedStoryData.chapters.length}`);
+        return regeneratedStoryData;
+      }
+    }
     
     console.log(`Successfully generated 3-chapter story for student: ${student.name}`);
     console.log(`- Interest Theme: ${interest}`);
@@ -277,6 +335,7 @@ Requirements:
   - 1 vocabulary-in-context
 - Each question should have 4 options (A–D).
 - Clearly indicate the correct answer.
+- Questions should focus on the story content and themes, not generic topics.
 
 Return the entire response as a single, valid JSON object with the following structure:
 {
@@ -468,8 +527,9 @@ ${fullStoryText}
 
 Student Interest: ${student.interests}
 
-Requirements:
-- Use the story and student interests as context.
+CRITICAL REQUIREMENTS:
+- ALL activities must be directly related to the story's theme and the student's interest: ${student.interests}.
+- Use the story and student interests as context for EVERY activity.
 - Activities by day:
   - Day 4: Sequencing puzzle, character choices game, and vocab scavenger hunt.
   - Day 5: Fun facts page, mini‑quiz, and crossword/word search.
@@ -478,6 +538,7 @@ Requirements:
 - Ensure age-appropriate language for ${studentAge} in grade ${student.gradeLevel}.
 - Vocabulary must reinforce: ${incorrectWords || 'key story vocabulary'}.
 - Output should clearly indicate activity type and instructions.
+- DO NOT create generic activities. Every activity must connect to the story's specific theme and the student's interest.
 
 Return the entire response as a single, valid JSON object with the following structure:
 {

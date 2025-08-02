@@ -21,3 +21,44 @@ body {
 html {
   @apply transition-colors duration-300;
 }
+
+/* Print Styles */
+@media print {
+  body {
+    margin: 0;
+    padding: 0;
+    background: white !important;
+  }
+  
+  .print-content {
+    margin: 0 !important;
+    padding: 20px !important;
+    max-width: none !important;
+    width: 100% !important;
+  }
+  
+  /* Hide non-printable elements */
+  button, .no-print {
+    display: none !important;
+  }
+  
+  /* Ensure text is readable */
+  * {
+    color: black !important;
+    background: white !important;
+  }
+  
+  /* Page breaks */
+  .page-break {
+    page-break-before: always;
+  }
+  
+  /* Avoid breaking within elements */
+  h1, h2, h3, h4, h5, h6 {
+    page-break-after: avoid;
+  }
+  
+  div {
+    page-break-inside: avoid;
+  }
+}

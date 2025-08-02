@@ -219,12 +219,21 @@ export default function DashboardPage() {
 
                     <div className="space-y-2">
                       {hasCompletedAssessment ? (
-                        <Button
-                          className="w-full"
-                          onClick={() => router.push(`/assessment/${latestAssessment.id}/results`)}
-                        >
-                          View Results
-                        </Button>
+                        <>
+                          <Button
+                            className="w-full"
+                            onClick={() => router.push(`/assessment/${latestAssessment.id}/results`)}
+                          >
+                            View Results
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            className="w-full"
+                            onClick={() => router.push(`/plan/${student.id}`)}
+                          >
+                            View Weekly Plan
+                          </Button>
+                        </>
                       ) : (
                         <Button
                           className="w-full"

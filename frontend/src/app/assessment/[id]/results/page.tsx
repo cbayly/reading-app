@@ -160,13 +160,16 @@ export default function AssessmentResultsPage() {
             100
         )
       : 0;
-  const gradeEquivalent = getGradeEquivalent(assessment.compositeScore || 0);
+  // Use backend reading level label and calculate grade level
+  const readingLevelLabel = assessment.readingLevelLabel || 'Grade Level Not Available';
   const gradeLevel = getGradeLevel(assessment.compositeScore || 0);
   const { strengths, weaknesses } = getStrengthsAndWeaknesses(
     assessment.wpm || 0,
     assessment.accuracy || 0,
     comprehensionScore
   );
+
+
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -196,10 +199,6 @@ export default function AssessmentResultsPage() {
                 {assessment.compositeScore || 0}
               </div>
               <div className="text-sm text-blue-800">Composite Score</div>
-              <div className="text-lg font-semibold text-blue-700 mt-1">
-                {assessment.readingLevelLabel || 'Grade Level Not Available'}
-              </div>
-              
               {/* Tooltip */}
               <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
                 <div className="font-semibold mb-1">Composite Score Breakdown:</div>
@@ -210,19 +209,25 @@ export default function AssessmentResultsPage() {
                   Total: {assessment.compositeScore || 0}
                 </div>
                 <div className="text-xs mt-1">
-                  Reading Level: {assessment.readingLevelLabel || 'N/A'}
+                  Reading Level: {readingLevelLabel}
+                </div>
+                <div className="text-xs">
+                  Assessed Grade: {gradeLevel}
                 </div>
                 <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
               </div>
             </div>
             <div className={`text-xl font-semibold ${
-              assessment.readingLevelLabel === 'Above Grade Level' ? 'text-green-600' :
-              assessment.readingLevelLabel === 'At Grade Level' ? 'text-blue-600' :
-              assessment.readingLevelLabel === 'Slightly Below Grade Level' ? 'text-yellow-600' :
-              assessment.readingLevelLabel === 'Below Grade Level' ? 'text-red-600' :
+              readingLevelLabel === 'Above Grade Level' ? 'text-green-600' :
+              readingLevelLabel === 'At Grade Level' ? 'text-blue-600' :
+              readingLevelLabel === 'Slightly Below Grade Level' ? 'text-yellow-600' :
+              readingLevelLabel === 'Below Grade Level' ? 'text-red-600' :
               'text-gray-900'
             }`}>
-              {assessment.readingLevelLabel || 'Grade Level Not Available'}
+              {readingLevelLabel}
+            </div>
+            <div className="text-lg text-gray-600 mt-2">
+              Grade Equivalent: {gradeLevel}
             </div>
           </div>
 

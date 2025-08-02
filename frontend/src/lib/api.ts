@@ -37,4 +37,20 @@ export const updateStudent = async (studentId: number, studentData: any) => {
   return response.data;
 };
 
+// Weekly Plan API functions
+export const generatePlan = async (studentId: number) => {
+  const response = await api.post('/plans/generate', { studentId });
+  return response.data;
+};
+
+export const getPlan = async (studentId: number) => {
+  const response = await api.get(`/plans/${studentId}`);
+  return response.data;
+};
+
+export const saveActivityResponse = async (activityId: number, response: any) => {
+  const apiResponse = await api.put(`/plans/activity/${activityId}`, { response });
+  return apiResponse.data;
+};
+
 export default api;

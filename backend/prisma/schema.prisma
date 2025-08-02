@@ -75,6 +75,8 @@ model WeeklyPlan {
   id            Int      @id @default(autoincrement())
   studentId     Int      @map("student_id")
   interestTheme String   @map("interest_theme")
+  cachedPrompt  Json?    @map("cached_prompt")
+  cachedOutput  Json?    @map("cached_output")
   createdAt     DateTime @default(now()) @map("created_at")
 
   // Relations
@@ -107,6 +109,8 @@ model DailyActivity {
   activityType   String   @map("activity_type") // e.g., 'Comprehension', 'Vocabulary', 'Game'
   content        Json     // Questions/prompts for the activity
   studentResponse Json?   @map("student_response") // Student's answers/responses
+  completed      Boolean  @default(false)
+  completedAt    DateTime? @map("completed_at")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
