@@ -7,7 +7,16 @@ import { WeeklyPlan, DailyActivity, WeeklyPlanViewProps } from '@/types/weekly-p
 import StoryDisplay from './StoryDisplay';
 import DailyActivityCard from './DailyActivityCard';
 
-export default function WeeklyPlanView({ plan, onActivityResponse }: WeeklyPlanViewProps) {
+export default function WeeklyPlanView({ 
+  plan, 
+  onActivityResponse,
+  onGenerateActivity,
+  onActivityComplete,
+  isGeneratingActivity = false,
+  generatingDay,
+  error,
+  onRetry
+}: WeeklyPlanViewProps) {
   const [viewMode, setViewMode] = useState<'story' | 'activities' | 'overview'>('story');
   const [studentResponses, setStudentResponses] = useState<Record<number, any>>({});
   const [savingResponse, setSavingResponse] = useState<number | null>(null);
@@ -51,15 +60,25 @@ export default function WeeklyPlanView({ plan, onActivityResponse }: WeeklyPlanV
     return previousDay?.completed || false;
   };
 
-  // Placeholder for activity generation handlers (will be implemented by parent)
-  const handleGenerateActivity = (dayOfWeek: number) => {
-    // This will be handled by the parent component
-    console.log(`Generate activity for day ${dayOfWeek}`);
+  // Activity generation and completion handlers
+  const handleGenerateActivity = async (dayOfWeek: number) => {
+    if (onGenerateActivity) {
+      try {
+        await onGenerateActivity(dayOfWeek);
+      } catch (error) {
+        console.error('Failed to generate activity:', error);
+      }
+    }
   };
 
-  const handleActivityComplete = (activityId: number) => {
-    // This will be handled by the parent component
-    console.log(`Complete activity ${activityId}`);
+  const handleActivityComplete = async (activityId: number) => {
+    if (onActivityComplete) {
+      try {
+        await onActivityComplete(activityId);
+      } catch (error) {
+        console.error('Failed to complete activity:', error);
+      }
+    }
   };
 
   return (
@@ -150,6 +169,51 @@ export default function WeeklyPlanView({ plan, onActivityResponse }: WeeklyPlanV
                   <span>{planStatus.progress}%</span>
                   <span>100%</span>
                 </div>
+                
+                {/* Next available day indicator */}
+                {planStatus.nextAvailableDay && (
+                  <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="flex items-center">
+                      <span className="text-blue-600 mr-2">🎯</span>
+                      <span className="text-blue-800 font-medium">
+                        Next available: Day {planStatus.nextAvailableDay}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Generation status */}
+            {isGeneratingActivity && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <div className="flex items-center">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-yellow-600 mr-3"></div>
+                  <span className="text-yellow-800 font-medium">
+                    Generating activity for Day {generatingDay}...
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Error handling */}
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                <div className="flex items-start">
+                  <span className="text-red-600 mr-3 text-xl">⚠️</span>
+                  <div className="flex-1">
+                    <h4 className="text-red-800 font-medium mb-2">Generation Failed</h4>
+                    <p className="text-red-700 text-sm mb-3">{error}</p>
+                    {onRetry && (
+                      <button
+                        onClick={onRetry}
+                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+                      >
+                        🔄 Try Again
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
 
@@ -160,25 +224,25 @@ export default function WeeklyPlanView({ plan, onActivityResponse }: WeeklyPlanV
                 const canGenerate = canGenerateActivity(day);
                 
                 return (
-                  <DailyActivityCard
-                    key={day}
-                    activity={activity || {
-                      id: `placeholder-${day}`,
-                      planId: plan.id,
-                      dayOfWeek: day,
-                      activityType: 'Loading...',
-                      content: null,
-                      completed: false,
-                      createdAt: new Date().toISOString(),
-                      updatedAt: new Date().toISOString()
-                    }}
-                    onGenerate={() => handleGenerateActivity(day)}
-                    onResponse={(response) => handleActivityResponse(activity?.id || 0, response)}
-                    onComplete={handleActivityComplete}
-                    canGenerate={canGenerate}
-                    isGenerating={false}
-                    isSubmitting={savingResponse === activity?.id}
-                  />
+                                     <DailyActivityCard
+                     key={day}
+                     activity={activity || {
+                       id: `placeholder-${day}`,
+                       planId: plan.id,
+                       dayOfWeek: day,
+                       activityType: 'Loading...',
+                       content: null,
+                       completed: false,
+                       createdAt: new Date().toISOString(),
+                       updatedAt: new Date().toISOString()
+                     }}
+                     onGenerate={() => handleGenerateActivity(day)}
+                     onResponse={(response) => handleActivityResponse(activity?.id || 0, response)}
+                     onComplete={handleActivityComplete}
+                     canGenerate={canGenerate}
+                     isGenerating={isGeneratingActivity && generatingDay === day}
+                     isSubmitting={savingResponse === activity?.id}
+                   />
                 );
               })}
             </div>

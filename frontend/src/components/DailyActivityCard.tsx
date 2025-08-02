@@ -9,6 +9,9 @@ interface DailyActivityCardProps {
   isGenerating?: boolean;
   isSubmitting?: boolean;
   canGenerate?: boolean;
+  hasError?: boolean;
+  errorMessage?: string;
+  onRetry?: () => void;
   className?: string;
 }
 
@@ -20,6 +23,9 @@ const DailyActivityCard: React.FC<DailyActivityCardProps> = ({
   isGenerating = false,
   isSubmitting = false,
   canGenerate = false,
+  hasError = false,
+  errorMessage,
+  onRetry,
   className = ''
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -209,7 +215,23 @@ const DailyActivityCard: React.FC<DailyActivityCardProps> = ({
             renderActivityContent()
           ) : (
             <div className="text-center py-8">
-              {canGenerate ? (
+              {hasError ? (
+                <div className="space-y-4">
+                  <div className="text-4xl">⚠️</div>
+                  <h4 className="font-semibold text-red-700">Generation Failed</h4>
+                  <p className="text-red-600 text-sm mb-3">
+                    {errorMessage || 'Failed to generate activity. Please try again.'}
+                  </p>
+                  {onRetry && (
+                    <button
+                      onClick={onRetry}
+                      className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                    >
+                      🔄 Try Again
+                    </button>
+                  )}
+                </div>
+              ) : canGenerate ? (
                 <div className="space-y-4">
                   <div className="text-4xl">🎯</div>
                   <h4 className="font-semibold text-gray-700">Ready to Generate</h4>

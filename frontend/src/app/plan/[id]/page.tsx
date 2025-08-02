@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { getPlan, saveActivityResponse, generatePlan } from '@/lib/api';
+import { getPlan, saveActivityResponse, generatePlan, generateDayActivity } from '@/lib/api';
 import WeeklyPlanView from '@/components/WeeklyPlanView';
+import CompletionCelebration from '@/components/CompletionCelebration';
 import { WeeklyPlan, DailyActivity, Chapter } from '@/types/weekly-plan';
 
 export default function WeeklyPlanPage() {
@@ -15,6 +16,11 @@ export default function WeeklyPlanPage() {
   const [savingActivity, setSavingActivity] = useState<number | null>(null);
   const [generatingPlan, setGeneratingPlan] = useState(false);
   const [planNotFound, setPlanNotFound] = useState(false);
+  const [generatingActivity, setGeneratingActivity] = useState(false);
+  const [generatingDay, setGeneratingDay] = useState<number | null>(null);
+  const [generationError, setGenerationError] = useState<string | null>(null);
+  const [showCelebration, setShowCelebration] = useState(false);
+  const [completedActivity, setCompletedActivity] = useState<{ dayNumber: number; activityType: string } | null>(null);
 
   useEffect(() => {
     const fetchPlan = async () => {
@@ -22,6 +28,14 @@ export default function WeeklyPlanPage() {
         const planData = await getPlan(Number(params.id));
         setPlan(planData);
         setPlanNotFound(false);
+        
+        // Auto-trigger Day 1 activity generation if no activities exist
+        if (planData && planData.dailyActivities.length === 0) {
+          console.log('Auto-triggering Day 1 activity generation');
+          setTimeout(() => {
+            handleGenerateActivity(1);
+          }, 1000); // Small delay to ensure plan is fully loaded
+        }
       } catch (err: any) {
         console.log('Error fetching plan:', err);
         console.log('Error response:', err?.response);
@@ -101,6 +115,83 @@ export default function WeeklyPlanPage() {
       setError('Failed to save your response. Please try again.');
     } finally {
       setSavingActivity(null);
+    }
+  };
+
+  const handleGenerateActivity = async (dayOfWeek: number) => {
+    if (!plan) return;
+    
+    try {
+      setGeneratingActivity(true);
+      setGeneratingDay(dayOfWeek);
+      setGenerationError(null);
+      
+      // Determine activity type based on day
+      const activityTypes = ['Comprehension', 'Vocabulary', 'Creative', 'Game', 'Writing', 'Review', 'Reflection'];
+      const activityType = activityTypes[dayOfWeek - 1] || 'Comprehension';
+      
+      const result = await generateDayActivity(plan.id, dayOfWeek, activityType);
+      
+      // Update the plan with the new activity
+      setPlan(prevPlan => {
+        if (!prevPlan) return prevPlan;
+        return {
+          ...prevPlan,
+          dailyActivities: [...prevPlan.dailyActivities, result.activity]
+        };
+      });
+      
+    } catch (err: any) {
+      console.error('Error generating activity:', err);
+      setGenerationError(err.message || 'Failed to generate activity. Please try again.');
+    } finally {
+      setGeneratingActivity(false);
+      setGeneratingDay(null);
+    }
+  };
+
+  const handleActivityComplete = async (activityId: number) => {
+    try {
+      setSavingActivity(activityId);
+      await saveActivityResponse(activityId, null, true); // Mark as completed
+      
+      // Find the completed activity for celebration
+      const completedActivity = plan?.dailyActivities.find(a => a.id === activityId);
+      
+      // Update the plan state
+      if (plan) {
+        setPlan(prevPlan => {
+          if (!prevPlan) return prevPlan;
+          return {
+            ...prevPlan,
+            dailyActivities: prevPlan.dailyActivities.map(activity =>
+              activity.id === activityId
+                ? { ...activity, completed: true, completedAt: new Date().toISOString() }
+                : activity
+            )
+          };
+        });
+      }
+      
+      // Show celebration
+      if (completedActivity) {
+        setCompletedActivity({
+          dayNumber: completedActivity.dayOfWeek,
+          activityType: completedActivity.activityType
+        });
+        setShowCelebration(true);
+      }
+    } catch (err) {
+      console.error('Error completing activity:', err);
+      setError('Failed to mark activity as complete. Please try again.');
+    } finally {
+      setSavingActivity(null);
+    }
+  };
+
+  const handleRetryGeneration = () => {
+    if (generatingDay) {
+      handleGenerateActivity(generatingDay);
     }
   };
 
@@ -202,8 +293,22 @@ export default function WeeklyPlanPage() {
         <WeeklyPlanView 
           plan={plan}
           onActivityResponse={handleActivityResponse}
+          onGenerateActivity={handleGenerateActivity}
+          onActivityComplete={handleActivityComplete}
+          isGeneratingActivity={generatingActivity}
+          generatingDay={generatingDay || undefined}
+          error={generationError || undefined}
+          onRetry={handleRetryGeneration}
         />
       </div>
+
+      {/* Completion Celebration */}
+      <CompletionCelebration
+        isVisible={showCelebration}
+        dayNumber={completedActivity?.dayNumber || 1}
+        activityType={completedActivity?.activityType || 'Activity'}
+        onClose={() => setShowCelebration(false)}
+      />
     </div>
   );
 } 

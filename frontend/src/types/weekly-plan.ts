@@ -37,6 +37,12 @@ export interface WeeklyPlan {
 export interface WeeklyPlanViewProps {
   plan: WeeklyPlan;
   onActivityResponse?: (activityId: number, response: any) => void;
+  onGenerateActivity?: (dayOfWeek: number) => Promise<void>;
+  onActivityComplete?: (activityId: number) => Promise<void>;
+  isGeneratingActivity?: boolean;
+  generatingDay?: number;
+  error?: string;
+  onRetry?: () => void;
 }
 
 export interface GeneratePlanRequest {
