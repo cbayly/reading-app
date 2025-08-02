@@ -121,7 +121,17 @@ export function StudentForm() {
     try {
       setLoadingStudentName(currentStudent.name);
       setShowLoadingScreen(true);
-      const { assessment } = await createAssessment(newStudentId);
+      const response = await createAssessment(newStudentId);
+      console.log('API response:', response);
+      
+      // Handle different response structures
+      const assessment = response.assessment || response;
+      console.log('Assessment object:', assessment);
+      
+      if (!assessment || !assessment.id) {
+        throw new Error('Invalid assessment response from server');
+      }
+      
       setCreatedAssessmentId(assessment.id);
       // Loading screen will handle the transition
     } catch (err) {
@@ -298,6 +308,7 @@ export function StudentForm() {
             setCreatedAssessmentId(null);
           } else {
             console.error('No assessment ID found for navigation');
+            setError('Failed to create assessment. Please try again.');
           }
         }}
       />

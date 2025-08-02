@@ -250,8 +250,17 @@ export default function DashboardPage() {
                               setLoadingStudentName(student.name);
                               setShowLoadingScreen(true);
                               console.log('Starting assessment for student:', student);
-                              const { assessment } = await createAssessment(student.id);
-                              console.log('Created assessment:', assessment);
+                              const response = await createAssessment(student.id);
+                              console.log('API response:', response);
+                              
+                              // Handle different response structures
+                              const assessment = response.assessment || response;
+                              console.log('Assessment object:', assessment);
+                              
+                              if (!assessment || !assessment.id) {
+                                throw new Error('Invalid assessment response from server');
+                              }
+                              
                               setCreatedAssessmentId(assessment.id);
                               // Loading screen will handle the transition
                             } catch (err) {
@@ -305,6 +314,7 @@ export default function DashboardPage() {
             setCreatedAssessmentId(null);
           } else {
             console.error('No assessment ID found for navigation');
+            setError('Failed to create assessment. Please try again.');
           }
         }}
       />
