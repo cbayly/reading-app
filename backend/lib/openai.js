@@ -7,6 +7,7 @@ import {
   logAIRequestWithCapture, 
   CONTENT_TYPES 
 } from './logging.js';
+import { getModelConfig } from './modelConfig.js';
 
 const prisma = new PrismaClient();
 
@@ -254,21 +255,15 @@ JSON STRUCTURE (copy exactly):
 }
 `;
 
+    const modelConfig = getModelConfig(CONTENT_TYPES.STORY_CREATION);
+    
     const aiFunction = async () => {
       return await openai.chat.completions.create({
-        model: 'gpt-4o',
+        model: modelConfig.model,
         messages: [{ role: 'user', content: storyPrompt }],
-        temperature: 0.7,
-        max_tokens: 4000,
+        temperature: modelConfig.temperature,
+        max_tokens: modelConfig.maxTokens,
       });
-    };
-
-    const modelConfig = {
-      model: 'gpt-4o',
-      temperature: 0.7,
-      maxTokens: 4000,
-      reasoning: 'Creative narrative generation for engaging children\'s stories',
-      isOverride: false
     };
 
     const result = await logAIRequestWithCapture({
@@ -380,25 +375,21 @@ JSON STRUCTURE (copy exactly):
       
       const regenerationPrompt = storyPrompt + regenerationReason + '\n\n🚨 CRITICAL: Regenerate the story following ALL requirements strictly. The previous version was rejected for quality issues.';
       
+      const regenerationModelConfig = getModelConfig(CONTENT_TYPES.STORY_CREATION);
+      
       const regenerationAIFunction = async () => {
         return await openai.chat.completions.create({
-          model: 'gpt-4o',
+          model: regenerationModelConfig.model,
           messages: [{ role: 'user', content: regenerationPrompt }],
-          temperature: 0.7,
-          max_tokens: 4000,
+          temperature: regenerationModelConfig.temperature,
+          max_tokens: regenerationModelConfig.maxTokens,
         });
       };
 
       const regenerationResult = await logAIRequestWithCapture({
         contentType: CONTENT_TYPES.STORY_CREATION,
         aiFunction: regenerationAIFunction,
-        modelConfig: {
-          model: 'gpt-4o',
-          temperature: 0.7,
-          maxTokens: 4000,
-          reasoning: 'Story regeneration due to quality issues',
-          isOverride: false
-        },
+        modelConfig: regenerationModelConfig,
         metadata: {
           studentId: student.id,
           studentName: student.name,
@@ -450,7 +441,88 @@ JSON STRUCTURE (copy exactly):
 
   } catch (error) {
     console.error('Error generating story from OpenAI:', error);
-    throw new Error(`Failed to generate story: ${error.message}`);
+    
+    // Enhanced error handling with model fallback
+    if (error.code === 'invalid_api_key') {
+      throw new Error('OpenAI API key is invalid or missing. Please check your environment variables.');
+    } else if (error.code === 'model_not_found' || error.code === 'model_capability_exceeded') {
+      console.warn(`Model ${modelConfig.model} not available or exceeded capabilities, attempting fallback...`);
+      
+      try {
+        // Try with GPT-3.5-turbo as fallback
+        const fallbackModelConfig = {
+          model: 'gpt-3.5-turbo',
+          temperature: 0.7,
+          maxTokens: 3000,
+          reasoning: 'Fallback model due to primary model unavailability',
+          isOverride: true,
+          overrideReason: 'Primary model unavailable'
+        };
+        
+        const fallbackAIFunction = async () => {
+          return await openai.chat.completions.create({
+            model: fallbackModelConfig.model,
+            messages: [{ role: 'user', content: storyPrompt }],
+            temperature: fallbackModelConfig.temperature,
+            max_tokens: fallbackModelConfig.maxTokens,
+          });
+        };
+
+        const fallbackResult = await logAIRequestWithCapture({
+          contentType: CONTENT_TYPES.STORY_CREATION,
+          aiFunction: fallbackAIFunction,
+          modelConfig: fallbackModelConfig,
+          metadata: {
+            studentId: student.id,
+            studentName: student.name,
+            interest: interest,
+            adjustedGradeLevel,
+            studentAge: new Date().getFullYear() - student.birthday.getFullYear(),
+            isFallback: true,
+            originalModel: modelConfig.model,
+            fallbackReason: error.message
+          }
+        });
+
+        const fallbackContent = fallbackResult.result.choices[0].message.content;
+        
+        if (!fallbackContent) {
+          throw new Error('Fallback model also returned an empty response.');
+        }
+
+        // Parse the fallback response
+        let fallbackStoryData;
+        try {
+          fallbackStoryData = JSON.parse(fallbackContent);
+        } catch (parseError) {
+          console.error('JSON parsing error in fallback response:', parseError);
+          console.error('Raw fallback content:', fallbackContent);
+          
+          // Try to clean the JSON and parse again
+          try {
+            let cleanedContent = fallbackContent;
+            cleanedContent = cleanedContent.replace(/```[a-z]*\n?/gi, '').replace(/```/g, '').trim();
+            const startIndex = cleanedContent.indexOf('{');
+            const endIndex = cleanedContent.lastIndexOf('}') + 1;
+            cleanedContent = cleanedContent.substring(startIndex, endIndex);
+            fallbackStoryData = JSON.parse(cleanedContent);
+            console.log('Successfully parsed fallback story data after cleaning JSON');
+          } catch (cleanError) {
+            throw new Error(`Failed to parse fallback JSON response: ${parseError.message}`);
+          }
+        }
+        
+        console.log(`Successfully generated story using fallback model (${fallbackModelConfig.model}) for student: ${student.name}`);
+        return fallbackStoryData;
+        
+      } catch (fallbackError) {
+        console.error('Fallback model also failed:', fallbackError);
+        throw new Error(`Both primary model (${modelConfig.model}) and fallback model failed. Please check your OpenAI configuration and try again.`);
+      }
+    } else {
+      // For other errors, provide detailed information
+      throw new Error(`Failed to generate story with model ${modelConfig.model}: ${error.message}`);
+    }
   }
 }
 
@@ -506,19 +578,14 @@ Return the entire response as a single, valid JSON object with the following str
 }
 `;
 
+    const modelConfig = getModelConfig(CONTENT_TYPES.DAILY_TASK_GENERATION);
+    
     const aiFunction = async () => {
       return await openai.chat.completions.create({
-        model: 'gpt-4o',
+        model: modelConfig.model,
         messages: [{ role: 'user', content: comprehensionPrompt }],
-        temperature: 0.7,
+        temperature: modelConfig.temperature,
       });
-    };
-
-    const modelConfig = {
-      model: 'gpt-4o',
-      temperature: 0.7,
-      reasoning: 'Structured comprehension question generation for reading assessment',
-      isOverride: false
     };
 
     const result = await logAIRequestWithCapture({
@@ -658,19 +725,14 @@ Return the entire response as a single, valid JSON object with the following str
 }
 `;
 
+    const modelConfig = getModelConfig(CONTENT_TYPES.DAILY_TASK_GENERATION);
+    
     const aiFunction = async () => {
       return await openai.chat.completions.create({
-        model: 'gpt-4o',
+        model: modelConfig.model,
         messages: [{ role: 'user', content: vocabularyPrompt }],
-        temperature: 0.7,
+        temperature: modelConfig.temperature,
       });
-    };
-
-    const modelConfig = {
-      model: 'gpt-4o',
-      temperature: 0.7,
-      reasoning: 'Vocabulary activity generation for reading comprehension',
-      isOverride: false
     };
 
     const result = await logAIRequestWithCapture({
@@ -867,19 +929,14 @@ Return the entire response as a single, valid JSON object with the following str
 }
 `;
 
+    const modelConfig = getModelConfig(CONTENT_TYPES.DAILY_TASK_GENERATION);
+    
     const aiFunction = async () => {
       return await openai.chat.completions.create({
-        model: 'gpt-4o',
+        model: modelConfig.model,
         messages: [{ role: 'user', content: gamePrompt }],
-        temperature: 0.8,
+        temperature: modelConfig.temperature,
       });
-    };
-
-    const modelConfig = {
-      model: 'gpt-4o',
-      temperature: 0.8,
-      reasoning: 'Creative game and activity generation for engaging learning experiences',
-      isOverride: false
     };
 
     const result = await logAIRequestWithCapture({
@@ -2373,19 +2430,14 @@ export async function generateAssessment(student) {
     
     const prompt = constructPrompt(student, selectedInterest, adjustedGradeLevel);
 
+    const modelConfig = getModelConfig(CONTENT_TYPES.ASSESSMENT_CREATION);
+    
     const aiFunction = async () => {
       return await openai.chat.completions.create({
-        model: 'gpt-4o',
+        model: modelConfig.model,
         messages: [{ role: 'user', content: prompt }],
-        temperature: 0.7,
+        temperature: modelConfig.temperature,
       });
-    };
-
-    const modelConfig = {
-      model: 'gpt-4o',
-      temperature: 0.7,
-      reasoning: 'Reading assessment generation with adaptive difficulty',
-      isOverride: false
     };
 
     const result = await logAIRequestWithCapture({
@@ -2443,15 +2495,88 @@ export async function generateAssessment(student) {
   } catch (error) {
     console.error('Error generating assessment from OpenAI:', error);
     
-    // Provide more specific error messages
+    // Enhanced error handling with model fallback
     if (error.code === 'invalid_api_key') {
       throw new Error('OpenAI API key is invalid or missing. Please check your environment variables.');
-    } else if (error.code === 'model_not_found') {
-      throw new Error('The specified OpenAI model is not available. Please check the model configuration.');
+    } else if (error.code === 'model_not_found' || error.code === 'model_capability_exceeded') {
+      console.warn(`Model ${modelConfig.model} not available or exceeded capabilities, attempting fallback...`);
+      
+      try {
+        // Try with GPT-3.5-turbo as fallback
+        const fallbackModelConfig = {
+          model: 'gpt-3.5-turbo',
+          temperature: 0.7,
+          maxTokens: 3000,
+          reasoning: 'Fallback model due to primary model unavailability',
+          isOverride: true,
+          overrideReason: 'Primary model unavailable'
+        };
+        
+        const fallbackAIFunction = async () => {
+          return await openai.chat.completions.create({
+            model: fallbackModelConfig.model,
+            messages: [{ role: 'user', content: prompt }],
+            temperature: fallbackModelConfig.temperature,
+            max_tokens: fallbackModelConfig.maxTokens,
+          });
+        };
+
+        const fallbackResult = await logAIRequestWithCapture({
+          contentType: CONTENT_TYPES.ASSESSMENT_CREATION,
+          aiFunction: fallbackAIFunction,
+          modelConfig: fallbackModelConfig,
+          metadata: {
+            studentId: student.id,
+            studentName: student.name,
+            originalGrade: student.gradeLevel,
+            adjustedGradeLevel,
+            selectedInterest,
+            wordCountRange: `${wordCountRange.min}-${wordCountRange.max}`,
+            previousReadingLevel: mostRecentAssessment?.readingLevelLabel || 'None',
+            isFallback: true,
+            originalModel: modelConfig.model,
+            fallbackReason: error.message
+          }
+        });
+
+        const fallbackContent = fallbackResult.result.choices[0].message.content;
+        
+        if (!fallbackContent) {
+          throw new Error('Fallback model also returned an empty response.');
+        }
+
+        // Parse the fallback response
+        let fallbackAssessmentData;
+        try {
+          fallbackAssessmentData = JSON.parse(fallbackContent);
+        } catch (parseError) {
+          console.error('JSON parsing error in fallback response:', parseError);
+          console.error('Raw fallback content:', fallbackContent);
+          
+          // Try to clean the JSON and parse again
+          try {
+            let cleanedContent = fallbackContent;
+            cleanedContent = cleanedContent.replace(/```[a-z]*\n?/gi, '').replace(/```/g, '').trim();
+            const startIndex = cleanedContent.indexOf('{');
+            const endIndex = cleanedContent.lastIndexOf('}') + 1;
+            cleanedContent = cleanedContent.substring(startIndex, endIndex);
+            fallbackAssessmentData = JSON.parse(cleanedContent);
+            console.log('Successfully parsed fallback assessment data after cleaning JSON');
+          } catch (cleanError) {
+            throw new Error(`Failed to parse fallback JSON response: ${parseError.message}`);
+          }
+        }
+        
+        console.log(`Successfully generated assessment using fallback model (${fallbackModelConfig.model}) for student: ${student.name}`);
+        return fallbackAssessmentData;
+        
+      } catch (fallbackError) {
+        console.error('Fallback model also failed:', fallbackError);
+        throw new Error(`Both primary model (${modelConfig.model}) and fallback model failed. Please check your OpenAI configuration and try again.`);
+      }
     } else {
-      // In a real application, you might have more sophisticated fallback logic,
-      // like using a pre-written passage from a database.
-      throw new Error(`Failed to generate assessment: ${error.message}`);
+      // For other errors, provide detailed information
+      throw new Error(`Failed to generate assessment with model ${modelConfig.model}: ${error.message}`);
     }
   }
 }
