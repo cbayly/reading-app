@@ -165,7 +165,9 @@ export default function AssessmentResultsPage() {
   const gradeLevel = getGradeLevel(assessment.compositeScore || 0);
   const { strengths, weaknesses } = getStrengthsAndWeaknesses(
     assessment.wpm || 0,
-    assessment.accuracy ? Math.round(assessment.accuracy * 100) : 0,
+    assessment.accuracy ? 
+      (assessment.accuracy > 1 ? Math.round(assessment.accuracy) : Math.round(assessment.accuracy * 100)) 
+      : 0,
     comprehensionScore
   );
 
@@ -239,7 +241,9 @@ export default function AssessmentResultsPage() {
             </div>
             <div className="bg-gray-50 rounded-lg p-4 text-center">
               <div className="text-2xl font-bold text-gray-900 mb-1">
-                {assessment.accuracy ? Math.round(assessment.accuracy * 100) : 0}%
+                {assessment.accuracy ? 
+                  (assessment.accuracy > 1 ? Math.round(assessment.accuracy) : Math.round(assessment.accuracy * 100)) 
+                  : 0}%
               </div>
               <div className="text-sm text-gray-600">Reading Accuracy</div>
             </div>
