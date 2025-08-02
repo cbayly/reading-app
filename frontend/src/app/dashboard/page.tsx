@@ -250,17 +250,25 @@ export default function DashboardPage() {
                               setLoadingStudentName(student.name);
                               setShowLoadingScreen(true);
                               console.log('Starting assessment for student:', student);
+                              console.log('Making API call to createAssessment with studentId:', student.id);
+                              
                               const response = await createAssessment(student.id);
-                              console.log('API response:', response);
+                              console.log('API response received:', response);
+                              console.log('Response type:', typeof response);
+                              console.log('Response keys:', Object.keys(response || {}));
                               
                               // Handle different response structures
                               const assessment = response.assessment || response;
                               console.log('Assessment object:', assessment);
+                              console.log('Assessment type:', typeof assessment);
+                              console.log('Assessment keys:', Object.keys(assessment || {}));
                               
                               if (!assessment || !assessment.id) {
+                                console.error('Assessment validation failed:', { assessment, hasId: assessment?.id });
                                 throw new Error('Invalid assessment response from server');
                               }
                               
+                              console.log('Setting createdAssessmentId to:', assessment.id);
                               setCreatedAssessmentId(assessment.id);
                               // Loading screen will handle the transition
                             } catch (err) {
@@ -305,6 +313,10 @@ export default function DashboardPage() {
         studentName={loadingStudentName}
         isVisible={showLoadingScreen}
         onComplete={() => {
+          console.log('Loading screen onComplete called');
+          console.log('Current createdAssessmentId:', createdAssessmentId);
+          console.log('Current creatingAssessment:', creatingAssessment);
+          
           setShowLoadingScreen(false);
           setCreatingAssessment(null);
           // Navigate to the assessment intro after loading completes
@@ -314,6 +326,7 @@ export default function DashboardPage() {
             setCreatedAssessmentId(null);
           } else {
             console.error('No assessment ID found for navigation');
+            console.error('State at completion:', { createdAssessmentId, creatingAssessment });
             setError('Failed to create assessment. Please try again.');
           }
         }}
