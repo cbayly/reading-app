@@ -171,23 +171,25 @@ You are an expert children's storyteller creating a 3-chapter story for a ${stud
 
 🚨 CRITICAL REQUIREMENTS - READ CAREFULLY 🚨
 
-📏 LENGTH REQUIREMENTS:
-- Each chapter MUST be 300-500 words
-- Count words carefully - stories under 300 words will be rejected
-- Quality AND length are both required
+📏 LENGTH REQUIREMENTS (NON-NEGOTIABLE):
+- Each chapter MUST be EXACTLY 300-500 words
+- Count every word carefully before submitting
+- Stories under 300 words will be automatically rejected and regenerated
+- This is a strict requirement - do not submit short chapters
 
 🎯 THEME REQUIREMENTS (MOST IMPORTANT):
-- The ENTIRE story must be about ${interest}
+- The ENTIRE story must be about ${interest} and nothing else
 - Every character, setting, conflict, and resolution must relate to ${interest}
 - If the theme is "religion", create a story about religious values, traditions, or spiritual growth
+- If the theme is "drums", create a story about drumming, percussion, or musical rhythm
 - If the theme is "cats", create a story about cats and their adventures
 - NO unrelated topics or tangential plot elements
 - ${interest} must be the central focus of every chapter
 
 📖 STORY STRUCTURE:
-- Chapter 1: Introduce protagonist and ${interest}-related conflict
-- Chapter 2: Develop the ${interest}-centered challenge
-- Chapter 3: Resolve the ${interest}-based problem with a satisfying ending
+- Chapter 1: Introduce protagonist and ${interest}-related conflict (300-500 words)
+- Chapter 2: Develop the ${interest}-centered challenge (300-500 words)
+- Chapter 3: Resolve the ${interest}-based problem with a satisfying ending (300-500 words)
 
 👤 CHARACTER REQUIREMENTS:
 - Protagonist should be ${studentAge}-${studentAge + 2} years old
@@ -195,22 +197,28 @@ You are an expert children's storyteller creating a 3-chapter story for a ${stud
 - Character's journey must revolve around ${interest}
 
 🎨 WRITING QUALITY:
-- Include 3-5 pieces of natural dialogue per chapter
+- Include 3-5 pieces of natural dialogue per chapter (use quotation marks)
 - Add vivid sensory details (sight, sound, touch, smell, taste)
 - Use descriptive language that creates mental pictures
 - Make each chapter engaging and age-appropriate
+- Write in proper paragraphs with clear structure
 
 📚 READING LEVEL:
 - Start at grade ${adjustedGradeLevel} level
 - Progress slightly in difficulty across chapters
 - Use vocabulary appropriate for the student's age
 
-⚠️ VALIDATION CHECKLIST:
-□ Each chapter is 300-500 words
+⚠️ VALIDATION CHECKLIST (VERIFY BEFORE SUBMITTING):
+□ Each chapter is 300-500 words exactly
 □ Story is entirely about ${interest}
 □ Protagonist is age-appropriate
 □ Includes dialogue and sensory details
 □ Has a clear beginning, middle, and end
+□ Proper paragraph structure and formatting
+
+🚨 FINAL WARNING: This story will be read by a child who deserves high-quality content. 
+   Do not submit anything that doesn't meet these standards.
+   If you cannot meet these requirements, regenerate until you can.
 
 OUTPUT FORMAT: Valid JSON only.
 
@@ -259,6 +267,7 @@ JSON STRUCTURE:
     // Validate chapter lengths and theme adherence
     let needsRegeneration = false;
     let themeIssues = [];
+    let qualityIssues = [];
     
     storyData.chapters.forEach((chapter, index) => {
       const wordCount = chapter.content.split(' ').length;
@@ -267,6 +276,7 @@ JSON STRUCTURE:
       if (wordCount < 300) {
         console.warn(`Chapter ${index + 1} is too short (${wordCount} words). Minimum required: 300 words.`);
         needsRegeneration = true;
+        qualityIssues.push(`Chapter ${index + 1} is too short (${wordCount} words)`);
       }
       
       // Check theme adherence
@@ -279,10 +289,27 @@ JSON STRUCTURE:
         themeIssues.push(`Chapter ${index + 1} does not mention the theme "${interest}"`);
         needsRegeneration = true;
       }
+      
+      // Check for proper dialogue formatting
+      const dialogueCount = (chapter.content.match(/"/g) || []).length;
+      if (dialogueCount < 4) { // At least 2 dialogue exchanges (4 quotes)
+        qualityIssues.push(`Chapter ${index + 1} lacks proper dialogue (only ${dialogueCount} quotes found)`);
+        needsRegeneration = true;
+      }
+      
+      // Check for paragraph structure
+      if (!chapter.content.includes('\n') && chapter.content.length > 500) {
+        qualityIssues.push(`Chapter ${index + 1} lacks proper paragraph structure`);
+        needsRegeneration = true;
+      }
     });
     
     if (themeIssues.length > 0) {
       console.warn('Theme adherence issues found:', themeIssues);
+    }
+    
+    if (qualityIssues.length > 0) {
+      console.warn('Quality issues found:', qualityIssues);
     }
     
     if (needsRegeneration) {
@@ -292,9 +319,14 @@ JSON STRUCTURE:
       if (themeIssues.length > 0) {
         regenerationReason += `\n\n🚨 THEME VIOLATION: The story must be entirely about "${interest}". Every chapter must mention and revolve around this theme.`;
       }
+      if (qualityIssues.length > 0) {
+        regenerationReason += `\n\n📝 QUALITY ISSUES: ${qualityIssues.join(', ')}`;
+      }
       regenerationReason += '\n\n📏 LENGTH ISSUE: Each chapter MUST be between 300-500 words. Do not stop writing until you reach the minimum word count.';
+      regenerationReason += '\n\n💬 DIALOGUE: Include proper dialogue with quotation marks.';
+      regenerationReason += '\n\n📄 STRUCTURE: Use proper paragraph breaks and formatting.';
       
-      const regenerationPrompt = storyPrompt + regenerationReason + '\n\nCRITICAL: Regenerate the story following ALL requirements strictly.';
+      const regenerationPrompt = storyPrompt + regenerationReason + '\n\n🚨 CRITICAL: Regenerate the story following ALL requirements strictly. The previous version was rejected for quality issues.';
       
       const regenerationResponse = await openai.chat.completions.create({
         model: 'gpt-4',
