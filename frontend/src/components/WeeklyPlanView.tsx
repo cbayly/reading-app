@@ -1,8 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import { useReactToPrint } from 'react-to-print';
-import { PrintableWeeklyPlan } from '@/lib/pdfUtils.tsx';
+import { useState } from 'react';
 import { WeeklyPlan, DailyActivity, WeeklyPlanViewProps } from '@/types/weekly-plan';
 import StoryDisplay from './StoryDisplay';
 import DailyActivityCard from './DailyActivityCard';
@@ -20,18 +18,8 @@ export default function WeeklyPlanView({
   const [viewMode, setViewMode] = useState<'story' | 'activities' | 'overview'>('story');
   const [studentResponses, setStudentResponses] = useState<Record<number, any>>({});
   const [savingResponse, setSavingResponse] = useState<number | null>(null);
-  const [showPrintPreview, setShowPrintPreview] = useState(false);
-  const printRef = useRef<HTMLDivElement>(null);
 
-  const handlePrint = useReactToPrint({
-    content: () => printRef.current,
-    onBeforeGetContent: () => {
-      setShowPrintPreview(true);
-    },
-    onAfterPrint: () => {
-      setShowPrintPreview(false);
-    },
-  });
+
 
   const handleActivityResponse = (activityId: number, response: any) => {
     // Update local state
@@ -84,7 +72,7 @@ export default function WeeklyPlanView({
   return (
     <>
       <div className="space-y-6">
-        {/* Header with Print Button */}
+        {/* Header */}
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Weekly Reading Plan</h1>
@@ -92,12 +80,6 @@ export default function WeeklyPlanView({
               {plan.student?.name && `For ${plan.student.name}`} • Theme: {plan.interestTheme}
             </p>
           </div>
-          <button
-            onClick={handlePrint}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            📄 Print Plan
-          </button>
         </div>
 
         {/* View Mode Toggle */}
@@ -295,12 +277,6 @@ export default function WeeklyPlanView({
         )}
       </div>
 
-      {/* Hidden Printable Component */}
-      <div style={{ display: 'none' }}>
-        <div ref={printRef}>
-          <PrintableWeeklyPlan plan={plan} />
-        </div>
-      </div>
     </>
   );
 } 
