@@ -113,6 +113,10 @@ export function StudentForm() {
       setError('Could not find the new student to start the assessment.');
       return;
     }
+    
+    // Prevent multiple clicks
+    if (isSubmitting) return;
+    
     setIsSubmitting(true);
     try {
       setLoadingStudentName(currentStudent.name);
@@ -123,6 +127,7 @@ export function StudentForm() {
     } catch (err) {
       setShowLoadingScreen(false);
       setIsSubmitting(false);
+      setCreatedAssessmentId(null);
       if (err instanceof Error) {
         setError(err.message);
       } else {
@@ -288,8 +293,11 @@ export function StudentForm() {
           setIsSubmitting(false);
           // Navigate to the assessment intro after loading completes
           if (createdAssessmentId) {
+            console.log('Navigating to assessment intro:', createdAssessmentId);
             router.push(`/assessment/${createdAssessmentId}/intro`);
             setCreatedAssessmentId(null);
+          } else {
+            console.error('No assessment ID found for navigation');
           }
         }}
       />

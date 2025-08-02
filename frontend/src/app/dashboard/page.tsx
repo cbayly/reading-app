@@ -242,6 +242,9 @@ export default function DashboardPage() {
                         <Button
                           className="w-full"
                           onClick={async () => {
+                            // Prevent multiple clicks
+                            if (creatingAssessment === student.id) return;
+                            
                             try {
                               setCreatingAssessment(student.id);
                               setLoadingStudentName(student.name);
@@ -255,6 +258,7 @@ export default function DashboardPage() {
                               console.error('Error creating assessment:', err);
                               setShowLoadingScreen(false);
                               setCreatingAssessment(null);
+                              setCreatedAssessmentId(null);
                               if (err instanceof Error) {
                                 setError(err.message);
                               } else {
@@ -296,8 +300,11 @@ export default function DashboardPage() {
           setCreatingAssessment(null);
           // Navigate to the assessment intro after loading completes
           if (createdAssessmentId) {
+            console.log('Navigating to assessment intro:', createdAssessmentId);
             router.push(`/assessment/${createdAssessmentId}/intro`);
             setCreatedAssessmentId(null);
+          } else {
+            console.error('No assessment ID found for navigation');
           }
         }}
       />
