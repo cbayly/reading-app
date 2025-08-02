@@ -3,6 +3,10 @@
 
 import OpenAI from 'openai';
 import { PrismaClient } from '@prisma/client';
+import { 
+  logAIRequestWithCapture, 
+  CONTENT_TYPES 
+} from './logging.js';
 
 const prisma = new PrismaClient();
 
@@ -250,14 +254,37 @@ JSON STRUCTURE (copy exactly):
 }
 `;
 
-    const response = await openai.chat.completions.create({
+    const aiFunction = async () => {
+      return await openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [{ role: 'user', content: storyPrompt }],
+        temperature: 0.7,
+        max_tokens: 4000,
+      });
+    };
+
+    const modelConfig = {
       model: 'gpt-4o',
-      messages: [{ role: 'user', content: storyPrompt }],
       temperature: 0.7,
-      max_tokens: 4000,
+      maxTokens: 4000,
+      reasoning: 'Creative narrative generation for engaging children\'s stories',
+      isOverride: false
+    };
+
+    const result = await logAIRequestWithCapture({
+      contentType: CONTENT_TYPES.STORY_CREATION,
+      aiFunction,
+      modelConfig,
+      metadata: {
+        studentId: student.id,
+        studentName: student.name,
+        interest: interest,
+        adjustedGradeLevel,
+        studentAge: new Date().getFullYear() - student.birthday.getFullYear()
+      }
     });
 
-    const content = response.choices[0].message.content;
+    const content = result.result.choices[0].message.content;
     
     if (!content) {
       throw new Error('OpenAI API returned an empty response.');
@@ -353,14 +380,37 @@ JSON STRUCTURE (copy exactly):
       
       const regenerationPrompt = storyPrompt + regenerationReason + '\n\n🚨 CRITICAL: Regenerate the story following ALL requirements strictly. The previous version was rejected for quality issues.';
       
-      const regenerationResponse = await openai.chat.completions.create({
-        model: 'gpt-4o',
-        messages: [{ role: 'user', content: regenerationPrompt }],
-        temperature: 0.7,
-        max_tokens: 4000,
+      const regenerationAIFunction = async () => {
+        return await openai.chat.completions.create({
+          model: 'gpt-4o',
+          messages: [{ role: 'user', content: regenerationPrompt }],
+          temperature: 0.7,
+          max_tokens: 4000,
+        });
+      };
+
+      const regenerationResult = await logAIRequestWithCapture({
+        contentType: CONTENT_TYPES.STORY_CREATION,
+        aiFunction: regenerationAIFunction,
+        modelConfig: {
+          model: 'gpt-4o',
+          temperature: 0.7,
+          maxTokens: 4000,
+          reasoning: 'Story regeneration due to quality issues',
+          isOverride: false
+        },
+        metadata: {
+          studentId: student.id,
+          studentName: student.name,
+          interest: interest,
+          adjustedGradeLevel,
+          isRegeneration: true,
+          qualityIssues,
+          themeIssues
+        }
       });
       
-      const regenerationContent = regenerationResponse.choices[0].message.content;
+      const regenerationContent = regenerationResult.result.choices[0].message.content;
       if (regenerationContent) {
         let regeneratedStoryData;
         try {
@@ -456,13 +506,35 @@ Return the entire response as a single, valid JSON object with the following str
 }
 `;
 
-    const response = await openai.chat.completions.create({
+    const aiFunction = async () => {
+      return await openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [{ role: 'user', content: comprehensionPrompt }],
+        temperature: 0.7,
+      });
+    };
+
+    const modelConfig = {
       model: 'gpt-4o',
-      messages: [{ role: 'user', content: comprehensionPrompt }],
       temperature: 0.7,
+      reasoning: 'Structured comprehension question generation for reading assessment',
+      isOverride: false
+    };
+
+    const result = await logAIRequestWithCapture({
+      contentType: CONTENT_TYPES.DAILY_TASK_GENERATION,
+      aiFunction,
+      modelConfig,
+      metadata: {
+        studentId: student.id,
+        studentName: student.name,
+        adjustedGradeLevel,
+        studentAge: new Date().getFullYear() - student.birthday.getFullYear(),
+        taskType: 'comprehension_questions'
+      }
     });
 
-    const content = response.choices[0].message.content;
+    const content = result.result.choices[0].message.content;
     
     if (!content) {
       throw new Error('OpenAI API returned an empty response.');
@@ -586,13 +658,35 @@ Return the entire response as a single, valid JSON object with the following str
 }
 `;
 
-    const response = await openai.chat.completions.create({
+    const aiFunction = async () => {
+      return await openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [{ role: 'user', content: vocabularyPrompt }],
+        temperature: 0.7,
+      });
+    };
+
+    const modelConfig = {
       model: 'gpt-4o',
-      messages: [{ role: 'user', content: vocabularyPrompt }],
       temperature: 0.7,
+      reasoning: 'Vocabulary activity generation for reading comprehension',
+      isOverride: false
+    };
+
+    const result = await logAIRequestWithCapture({
+      contentType: CONTENT_TYPES.DAILY_TASK_GENERATION,
+      aiFunction,
+      modelConfig,
+      metadata: {
+        studentId: student.id,
+        studentName: student.name,
+        adjustedGradeLevel,
+        studentAge: new Date().getFullYear() - student.birthday.getFullYear(),
+        taskType: 'vocabulary_activities'
+      }
     });
 
-    const content = response.choices[0].message.content;
+    const content = result.result.choices[0].message.content;
     
     if (!content) {
       throw new Error('OpenAI API returned an empty response.');
@@ -773,13 +867,33 @@ Return the entire response as a single, valid JSON object with the following str
 }
 `;
 
-    const response = await openai.chat.completions.create({
+    const aiFunction = async () => {
+      return await openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [{ role: 'user', content: gamePrompt }],
+        temperature: 0.8,
+      });
+    };
+
+    const modelConfig = {
       model: 'gpt-4o',
-      messages: [{ role: 'user', content: gamePrompt }],
       temperature: 0.8,
+      reasoning: 'Creative game and activity generation for engaging learning experiences',
+      isOverride: false
+    };
+
+    const result = await logAIRequestWithCapture({
+      contentType: CONTENT_TYPES.DAILY_TASK_GENERATION,
+      aiFunction,
+      modelConfig,
+      metadata: {
+        studentId: student.id,
+        studentName: student.name,
+        taskType: 'game_creative_activities'
+      }
     });
 
-    const content = response.choices[0].message.content;
+    const content = result.result.choices[0].message.content;
     
     if (!content) {
       throw new Error('OpenAI API returned an empty response.');
@@ -2259,13 +2373,37 @@ export async function generateAssessment(student) {
     
     const prompt = constructPrompt(student, selectedInterest, adjustedGradeLevel);
 
-    const response = await openai.chat.completions.create({
+    const aiFunction = async () => {
+      return await openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.7,
+      });
+    };
+
+    const modelConfig = {
       model: 'gpt-4o',
-      messages: [{ role: 'user', content: prompt }],
       temperature: 0.7,
+      reasoning: 'Reading assessment generation with adaptive difficulty',
+      isOverride: false
+    };
+
+    const result = await logAIRequestWithCapture({
+      contentType: CONTENT_TYPES.ASSESSMENT_CREATION,
+      aiFunction,
+      modelConfig,
+      metadata: {
+        studentId: student.id,
+        studentName: student.name,
+        originalGrade: student.gradeLevel,
+        adjustedGradeLevel,
+        selectedInterest,
+        wordCountRange: `${wordCountRange.min}-${wordCountRange.max}`,
+        previousReadingLevel: mostRecentAssessment?.readingLevelLabel || 'None'
+      }
     });
 
-    const content = response.choices[0].message.content;
+    const content = result.result.choices[0].message.content;
     
     if (!content) {
       throw new Error('OpenAI API returned an empty response.');
