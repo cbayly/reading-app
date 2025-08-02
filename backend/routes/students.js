@@ -19,6 +19,30 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /api/students/:id
+router.get('/:id', async (req, res) => {
+  try {
+    const studentId = parseInt(req.params.id);
+    
+    // Verify the student belongs to the authenticated parent
+    const student = await prisma.student.findFirst({
+      where: {
+        id: studentId,
+        parentId: req.user.id
+      }
+    });
+
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+
+    res.json(student);
+  } catch (err) {
+    console.error("❌ Error fetching student:", err);
+    res.status(500).json({ message: "Failed to fetch student" });
+  }
+});
+
 // POST /api/students
 router.post('/', async (req, res) => {
   try {

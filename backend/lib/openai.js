@@ -176,6 +176,9 @@ You are an expert children's storyteller creating a 3-chapter story for a ${stud
 - Count every word carefully before submitting
 - Stories under 300 words will be automatically rejected and regenerated
 - This is a strict requirement - do not submit short chapters
+- WRITE MORE - aim for 400-450 words per chapter
+- Do not stop writing until you reach the minimum word count
+- IMPORTANT: Write detailed descriptions, include multiple dialogue exchanges, and expand on every scene
 
 🎯 THEME REQUIREMENTS (MOST IMPORTANT):
 - The ENTIRE story must be about ${interest} and nothing else
@@ -220,9 +223,9 @@ You are an expert children's storyteller creating a 3-chapter story for a ${stud
    Do not submit anything that doesn't meet these standards.
    If you cannot meet these requirements, regenerate until you can.
 
-OUTPUT FORMAT: Valid JSON only.
+OUTPUT FORMAT: Valid JSON only. Do not include any text outside the JSON structure.
 
-JSON STRUCTURE:
+JSON STRUCTURE (copy exactly):
 {
   "chapters": [
     {
@@ -248,9 +251,8 @@ JSON STRUCTURE:
 `;
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4',
+      model: 'gpt-4o',
       messages: [{ role: 'user', content: storyPrompt }],
-      response_format: { type: 'json_object' },
       temperature: 0.7,
       max_tokens: 4000,
     });
@@ -262,7 +264,28 @@ JSON STRUCTURE:
     }
 
     // Parse the JSON string into an object
-    const storyData = JSON.parse(content);
+    let storyData;
+    try {
+      storyData = JSON.parse(content);
+    } catch (parseError) {
+      console.error('JSON parsing error:', parseError);
+      console.error('Raw content:', content);
+      
+      // Try to clean the JSON and parse again
+      try {
+        let cleanedContent = content;
+        // Remove any leading/trailing code block markers (``` or ```json)
+        cleanedContent = cleanedContent.replace(/```[a-z]*\n?/gi, '').replace(/```/g, '').trim();
+        // Now extract the JSON object
+        const startIndex = cleanedContent.indexOf('{');
+        const endIndex = cleanedContent.lastIndexOf('}') + 1;
+        cleanedContent = cleanedContent.substring(startIndex, endIndex);
+        storyData = JSON.parse(cleanedContent);
+        console.log('Successfully parsed after cleaning JSON');
+      } catch (cleanError) {
+        throw new Error(`Failed to parse JSON response: ${parseError.message}`);
+      }
+    }
     
     // Validate chapter lengths and theme adherence
     let needsRegeneration = false;
@@ -323,22 +346,43 @@ JSON STRUCTURE:
         regenerationReason += `\n\n📝 QUALITY ISSUES: ${qualityIssues.join(', ')}`;
       }
       regenerationReason += '\n\n📏 LENGTH ISSUE: Each chapter MUST be between 300-500 words. Do not stop writing until you reach the minimum word count.';
+      regenerationReason += '\n\n🚨 CRITICAL: The previous chapters were too short. You MUST write longer chapters. Aim for 400-450 words each.';
+      regenerationReason += '\n\n📝 WRITING TIP: Expand on descriptions, add more dialogue, include more details about the theme.';
       regenerationReason += '\n\n💬 DIALOGUE: Include proper dialogue with quotation marks.';
       regenerationReason += '\n\n📄 STRUCTURE: Use proper paragraph breaks and formatting.';
       
       const regenerationPrompt = storyPrompt + regenerationReason + '\n\n🚨 CRITICAL: Regenerate the story following ALL requirements strictly. The previous version was rejected for quality issues.';
       
       const regenerationResponse = await openai.chat.completions.create({
-        model: 'gpt-4',
+        model: 'gpt-4o',
         messages: [{ role: 'user', content: regenerationPrompt }],
-        response_format: { type: 'json_object' },
         temperature: 0.7,
         max_tokens: 4000,
       });
       
       const regenerationContent = regenerationResponse.choices[0].message.content;
       if (regenerationContent) {
-        const regeneratedStoryData = JSON.parse(regenerationContent);
+        let regeneratedStoryData;
+        try {
+          regeneratedStoryData = JSON.parse(regenerationContent);
+        } catch (parseError) {
+          console.error('JSON parsing error in regeneration:', parseError);
+          console.error('Raw regeneration content:', regenerationContent);
+          // Try to clean the JSON and parse again
+          try {
+            let cleanedContent = regenerationContent;
+            // Remove any leading/trailing code block markers (``` or ```json)
+            cleanedContent = cleanedContent.replace(/```[a-z]*\n?/gi, '').replace(/```/g, '').trim();
+            // Now extract the JSON object
+            const startIndex = cleanedContent.indexOf('{');
+            const endIndex = cleanedContent.lastIndexOf('}') + 1;
+            cleanedContent = cleanedContent.substring(startIndex, endIndex);
+            regeneratedStoryData = JSON.parse(cleanedContent);
+            console.log('Successfully parsed regeneration after cleaning JSON');
+          } catch (cleanError) {
+            throw new Error(`Failed to parse regenerated JSON response: ${parseError.message}`);
+          }
+        }
         console.log(`Successfully regenerated 3-chapter story for student: ${student.name}`);
         console.log(`- Interest Theme: ${interest}`);
         console.log(`- Adjusted Grade Level: ${adjustedGradeLevel}`);
@@ -413,9 +457,8 @@ Return the entire response as a single, valid JSON object with the following str
 `;
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: 'gpt-4o',
       messages: [{ role: 'user', content: comprehensionPrompt }],
-      response_format: { type: 'json_object' },
       temperature: 0.7,
     });
 
@@ -426,7 +469,28 @@ Return the entire response as a single, valid JSON object with the following str
     }
 
     // Parse the JSON string into an object
-    const questionData = JSON.parse(content);
+    let questionData;
+    try {
+      questionData = JSON.parse(content);
+    } catch (parseError) {
+      console.error('JSON parsing error:', parseError);
+      console.error('Raw content:', content);
+      
+      // Try to clean the JSON and parse again
+      try {
+        let cleanedContent = content;
+        // Remove any leading/trailing code block markers (``` or ```json)
+        cleanedContent = cleanedContent.replace(/```[a-z]*\n?/gi, '').replace(/```/g, '').trim();
+        // Now extract the JSON object
+        const startIndex = cleanedContent.indexOf('{');
+        const endIndex = cleanedContent.lastIndexOf('}') + 1;
+        cleanedContent = cleanedContent.substring(startIndex, endIndex);
+        questionData = JSON.parse(cleanedContent);
+        console.log('Successfully parsed comprehension questions after cleaning JSON');
+      } catch (cleanError) {
+        throw new Error(`Failed to parse JSON response: ${parseError.message}`);
+      }
+    }
     
     console.log(`Successfully generated ${questionData.questions.length} comprehension questions for student: ${student.name}`);
     
@@ -523,9 +587,8 @@ Return the entire response as a single, valid JSON object with the following str
 `;
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: 'gpt-4o',
       messages: [{ role: 'user', content: vocabularyPrompt }],
-      response_format: { type: 'json_object' },
       temperature: 0.7,
     });
 
@@ -536,7 +599,28 @@ Return the entire response as a single, valid JSON object with the following str
     }
 
     // Parse the JSON string into an object
-    const vocabularyData = JSON.parse(content);
+    let vocabularyData;
+    try {
+      vocabularyData = JSON.parse(content);
+    } catch (parseError) {
+      console.error('JSON parsing error:', parseError);
+      console.error('Raw content:', content);
+      
+      // Try to clean the JSON and parse again
+      try {
+        let cleanedContent = content;
+        // Remove any leading/trailing code block markers (``` or ```json)
+        cleanedContent = cleanedContent.replace(/```[a-z]*\n?/gi, '').replace(/```/g, '').trim();
+        // Now extract the JSON object
+        const startIndex = cleanedContent.indexOf('{');
+        const endIndex = cleanedContent.lastIndexOf('}') + 1;
+        cleanedContent = cleanedContent.substring(startIndex, endIndex);
+        vocabularyData = JSON.parse(cleanedContent);
+        console.log('Successfully parsed vocabulary activities after cleaning JSON');
+      } catch (cleanError) {
+        throw new Error(`Failed to parse JSON response: ${parseError.message}`);
+      }
+    }
     
     console.log(`Successfully generated ${vocabularyData.activities.length} vocabulary activities for student: ${student.name}`);
     
@@ -690,9 +774,8 @@ Return the entire response as a single, valid JSON object with the following str
 `;
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: 'gpt-4o',
       messages: [{ role: 'user', content: gamePrompt }],
-      response_format: { type: 'json_object' },
       temperature: 0.8,
     });
 
@@ -703,7 +786,28 @@ Return the entire response as a single, valid JSON object with the following str
     }
 
     // Parse the JSON string into an object
-    const gameData = JSON.parse(content);
+    let gameData;
+    try {
+      gameData = JSON.parse(content);
+    } catch (parseError) {
+      console.error('JSON parsing error:', parseError);
+      console.error('Raw content:', content);
+      
+      // Try to clean the JSON and parse again
+      try {
+        let cleanedContent = content;
+        // Remove any leading/trailing code block markers (``` or ```json)
+        cleanedContent = cleanedContent.replace(/```[a-z]*\n?/gi, '').replace(/```/g, '').trim();
+        // Now extract the JSON object
+        const startIndex = cleanedContent.indexOf('{');
+        const endIndex = cleanedContent.lastIndexOf('}') + 1;
+        cleanedContent = cleanedContent.substring(startIndex, endIndex);
+        gameData = JSON.parse(cleanedContent);
+        console.log('Successfully parsed game activities after cleaning JSON');
+      } catch (cleanError) {
+        throw new Error(`Failed to parse JSON response: ${parseError.message}`);
+      }
+    }
     
     console.log(`Successfully generated game and creative activities for days 4-7 for student: ${student.name}`);
     
@@ -2156,9 +2260,8 @@ export async function generateAssessment(student) {
     const prompt = constructPrompt(student, selectedInterest, adjustedGradeLevel);
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: 'gpt-4o',
       messages: [{ role: 'user', content: prompt }],
-      response_format: { type: 'json_object' },
       temperature: 0.7,
     });
 
@@ -2169,7 +2272,28 @@ export async function generateAssessment(student) {
     }
 
     // Parse the JSON string into an object
-    const assessmentData = JSON.parse(content);
+    let assessmentData;
+    try {
+      assessmentData = JSON.parse(content);
+    } catch (parseError) {
+      console.error('JSON parsing error:', parseError);
+      console.error('Raw content:', content);
+      
+      // Try to clean the JSON and parse again
+      try {
+        let cleanedContent = content;
+        // Remove any leading/trailing code block markers (``` or ```json)
+        cleanedContent = cleanedContent.replace(/```[a-z]*\n?/gi, '').replace(/```/g, '').trim();
+        // Now extract the JSON object
+        const startIndex = cleanedContent.indexOf('{');
+        const endIndex = cleanedContent.lastIndexOf('}') + 1;
+        cleanedContent = cleanedContent.substring(startIndex, endIndex);
+        assessmentData = JSON.parse(cleanedContent);
+        console.log('Successfully parsed assessment data after cleaning JSON');
+      } catch (cleanError) {
+        throw new Error(`Failed to parse JSON response: ${parseError.message}`);
+      }
+    }
     
     // Log the actual word count of the generated passage
     const actualWordCount = assessmentData.passage.split(/\s+/).length;
