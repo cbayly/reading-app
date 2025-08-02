@@ -37,6 +37,26 @@ export default function DashboardPage() {
   const [loadingStudentName, setLoadingStudentName] = useState('');
   const [createdAssessmentId, setCreatedAssessmentId] = useState<number | null>(null);
 
+  // Define the loading screen completion callback at the top level
+  const handleLoadingComplete = useCallback(() => {
+    console.log('Loading screen onComplete called');
+    console.log('Current createdAssessmentId:', createdAssessmentId);
+    console.log('Current creatingAssessment:', creatingAssessment);
+    
+    setShowLoadingScreen(false);
+    setCreatingAssessment(null);
+    // Navigate to the assessment intro after loading completes
+    if (createdAssessmentId) {
+      console.log('Navigating to assessment intro:', createdAssessmentId);
+      router.push(`/assessment/${createdAssessmentId}/intro`);
+      setCreatedAssessmentId(null);
+    } else {
+      console.error('No assessment ID found for navigation');
+      console.error('State at completion:', { createdAssessmentId, creatingAssessment });
+      setError('Failed to create assessment. Please try again.');
+    }
+  }, [createdAssessmentId, creatingAssessment, router]);
+
   useEffect(() => {
     const fetchStudents = async () => {
       try {
@@ -312,24 +332,7 @@ export default function DashboardPage() {
       <AssessmentLoadingScreen
         studentName={loadingStudentName}
         isVisible={showLoadingScreen}
-        onComplete={useCallback(() => {
-          console.log('Loading screen onComplete called');
-          console.log('Current createdAssessmentId:', createdAssessmentId);
-          console.log('Current creatingAssessment:', creatingAssessment);
-          
-          setShowLoadingScreen(false);
-          setCreatingAssessment(null);
-          // Navigate to the assessment intro after loading completes
-          if (createdAssessmentId) {
-            console.log('Navigating to assessment intro:', createdAssessmentId);
-            router.push(`/assessment/${createdAssessmentId}/intro`);
-            setCreatedAssessmentId(null);
-          } else {
-            console.error('No assessment ID found for navigation');
-            console.error('State at completion:', { createdAssessmentId, creatingAssessment });
-            setError('Failed to create assessment. Please try again.');
-          }
-        }, [createdAssessmentId, creatingAssessment, router])}
+        onComplete={handleLoadingComplete}
       />
     </div>
   );
