@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 
 interface AssessmentLoadingScreenProps {
   studentName: string;
@@ -44,8 +44,8 @@ const AssessmentLoadingScreen: React.FC<AssessmentLoadingScreenProps> = ({
     return shuffled.slice(0, 4);
   };
 
-  // Get random steps for this loading session
-  const steps = getRandomSteps();
+  // Use useMemo to ensure steps are only generated once per loading session
+  const steps = useMemo(() => getRandomSteps(), []);
 
   useEffect(() => {
     if (!isVisible) {
