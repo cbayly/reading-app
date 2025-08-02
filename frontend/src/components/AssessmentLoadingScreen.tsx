@@ -14,12 +14,38 @@ const AssessmentLoadingScreen: React.FC<AssessmentLoadingScreenProps> = ({
   const [currentStep, setCurrentStep] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
 
-  const steps = [
-    `Coming up with something interesting to read for ${studentName}.`,
-    "Winding up the timer.",
-    "Coming up with tricky questions.",
-    "Getting ready to count words"
+  // All possible loading messages
+  const allLoadingMessages = [
+    "Dusting off the magic reading lamp…",
+    "Teaching the timer to count backwards…",
+    "Double‑checking the question goblins didn't sneak in…",
+    "Feeding the reading dragon its breakfast…",
+    "Charging up the imagination batteries…",
+    "Polishing the tricky questions until they sparkle…",
+    "Warming up the word counter's fingers…",
+    "Asking the story fairies for a sprinkle of adventure…",
+    "Making sure the bookworms are ready to cheer you on…",
+    "Unlocking the treasure chest of questions…",
+    "Training the owl to keep track of time…",
+    "Herding the kittens away from the story pages…",
+    "Teaching the parrot to ask the tricky questions…",
+    "Making sure the puppy doesn't chase the commas…",
+    "Letting the wise turtle count the words carefully…",
+    "Packing the backpack full of stories…",
+    "Charging the rocket boosters for your reading journey…",
+    "Checking the treasure map for hidden words…",
+    "Calibrating the adventure compass…",
+    "Gathering clues for the mystery ahead…"
   ];
+
+  // Function to shuffle array and get random items
+  const getRandomSteps = () => {
+    const shuffled = [...allLoadingMessages].sort(() => 0.5 - Math.random());
+    return shuffled.slice(0, 4);
+  };
+
+  // Get random steps for this loading session
+  const steps = getRandomSteps();
 
   useEffect(() => {
     if (!isVisible) {
