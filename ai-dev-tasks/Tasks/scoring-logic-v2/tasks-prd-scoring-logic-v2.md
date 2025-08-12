@@ -64,8 +64,8 @@
   - [x] 5.4 Verify 400 INVALID_ATTEMPT unchanged
 
 - [ ] 6.0 Add observability
-  - [ ] 6.1 Use existing logger to log `{ flag: v2, F, C, Composite, label, floors: { fMet, cMet }, capEngaged, accuracyHardFloorApplied }`
-  - [ ] 6.2 Consider minimal counters or summary logs during rollout (optional)
+  - [x] 6.1 Use existing logger to log `{ flag: v2, F, C, Composite, label, floors: { fMet, cMet }, capEngaged, accuracyHardFloorApplied }`
+  - [x] 6.2 Consider minimal counters or summary logs during rollout (optional)
 
 - [ ] 7.0 Rollout plan and developer docs
   - [ ] 7.1 Add flag control instructions and defaults to docs

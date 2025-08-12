@@ -916,3 +916,76 @@ export function importLogEntry(jsonString) {
     throw new Error(`Failed to import log entry: ${error.message}`);
   }
 } 
+
+/**
+ * Logs structured scoring metrics for assessments (v1/v2 agnostic)
+ * @param {Object} data - Scoring metrics payload
+ * @param {boolean} data.useV2 - Whether v2 scoring was used
+ * @param {number} data.wpm - Words per minute
+ * @param {number} data.accuracy - Accuracy percent
+ * @param {number} data.fluencyScore - Fluency score F
+ * @param {number} data.compVocabScore - Comp/Vocab score C
+ * @param {number} data.compositeScore - Composite score
+ * @param {string} data.label - Assigned reading level label
+ * @param {Object} [data.floors] - Floor checks
+ * @param {boolean} [data.floors.fAt]
+ * @param {boolean} [data.floors.cAt]
+ * @param {boolean} [data.floors.fAbove]
+ * @param {boolean} [data.floors.cAbove]
+ * @param {boolean} [data.capEngaged] - Whether fluency cap affected F
+ * @param {boolean} [data.accuracyHardFloorApplied] - Whether accuracy hard floor forced a downgrade
+ */
+export function logScoringMetrics(data) {
+  try {
+    const entry = {
+      timestamp: new Date().toISOString(),
+      type: 'scoring_metrics',
+      ...data,
+    };
+    console.log(`📏 Scoring Metrics: ${JSON.stringify(entry)}`);
+    // Increment minimal counters and occasionally log a compact summary
+    try {
+      incrementScoringCounters(Boolean(data.useV2), String(data.label || 'Unknown'));
+      maybeLogScoringSummary();
+    } catch (innerErr) {
+      // Never throw from logging utilities
+    }
+  } catch (err) {
+    console.warn('⚠️ Failed to log scoring metrics:', err.message);
+  }
+}
+
+// --- Minimal rollout counters for scoring labels (v1 vs v2) ---
+export const SCORING_COUNTERS = {
+  v1: { total: 0, byLabel: {} },
+  v2: { total: 0, byLabel: {} },
+};
+
+/**
+ * Increments counters for scoring label distribution.
+ * @param {boolean} useV2 - Whether v2 scoring was used
+ * @param {string} label - Assigned reading level label
+ */
+export function incrementScoringCounters(useV2, label) {
+  const bucket = useV2 ? SCORING_COUNTERS.v2 : SCORING_COUNTERS.v1;
+  bucket.total += 1;
+  bucket.byLabel[label] = (bucket.byLabel[label] || 0) + 1;
+}
+
+let LAST_SCORING_SUMMARY_TOTAL = 0;
+
+/**
+ * Emits a compact summary occasionally to avoid noisy logs.
+ * Current policy: every 10 total scoring events across v1+v2.
+ */
+export function maybeLogScoringSummary() {
+  const grandTotal = SCORING_COUNTERS.v1.total + SCORING_COUNTERS.v2.total;
+  if (grandTotal > 0 && grandTotal % 10 === 0 && grandTotal !== LAST_SCORING_SUMMARY_TOTAL) {
+    LAST_SCORING_SUMMARY_TOTAL = grandTotal;
+    console.log('📈 Scoring Summary (rollout counters):', {
+      grandTotal,
+      v1: SCORING_COUNTERS.v1,
+      v2: SCORING_COUNTERS.v2,
+    });
+  }
+}
