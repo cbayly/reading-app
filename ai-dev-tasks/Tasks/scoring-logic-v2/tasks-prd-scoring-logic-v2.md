@@ -47,7 +47,7 @@
 - [ ] 3.0 Add tunable constants via environment variables and document usage
   - [x] 3.1 Support `FLUENCY_CAP` (default 150)
   - [x] 3.2 Support optional `ACCURACY_HARD_FLOOR` (integer percent, e.g., 93)
-  - [ ] 3.3 Add `.env.example` entries and short doc
+  - [x] 3.3 Add `.env.example` entries and short doc
   - [x] 3.4 Document in `backend/docs/README.md`
 
 - [x] 4.0 Add unit tests for scoring math, floors, labels, and rounding
@@ -68,9 +68,9 @@
   - [x] 6.2 Consider minimal counters or summary logs during rollout (optional)
 
 - [ ] 7.0 Rollout plan and developer docs
-  - [ ] 7.1 Add flag control instructions and defaults to docs
-  - [ ] 7.2 Add monitoring checklist and rollback steps
-  - [ ] 7.3 Create a brief CHANGELOG entry noting feature flag and behavior
+  - [x] 7.1 Add flag control instructions and defaults to docs
+  - [x] 7.2 Add monitoring checklist and rollback steps
+  - [x] 7.3 Create a brief CHANGELOG entry noting feature flag and behavior
 
 
 
