@@ -9,7 +9,11 @@
     "build": "prisma generate",
     "deploy": "prisma migrate deploy && prisma generate",
     "db:migrate": "prisma migrate dev",
-    "db:seed": "node scripts/seed.js"
+    "db:seed": "node scripts/seed.js",
+    "db:delete-assessments": "node scripts/delete-assessments.js",
+    "test": "node --experimental-vm-modules node_modules/.bin/jest",
+    "test:watch": "node --experimental-vm-modules node_modules/.bin/jest --watch",
+    "test:coverage": "node --experimental-vm-modules node_modules/.bin/jest --coverage"
   },
   "dependencies": {
     "@prisma/client": "^6.12.0",
@@ -23,6 +27,8 @@
     "seed": "node scripts/seed.js"
   },
   "devDependencies": {
-    "jest": "^30.0.5"
+    "jest": "^30.0.5",
+    "nodemon": "^3.1.10",
+    "supertest": "^7.1.4"
   }
 }
