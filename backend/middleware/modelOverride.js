@@ -12,7 +12,7 @@
  * - Development environment protection
  */
 
-import { getModelConfig, isModelSupported, getOverrideStatus } from '../lib/modelConfig.js';
+import { getModelConfig, isModelSupported, getOverrideStatus, MODELS } from '../lib/modelConfig.js';
 import { CONTENT_TYPES } from '../lib/logging.js';
 
 // Supported override methods
@@ -94,7 +94,7 @@ function validateOverride(override, contentType) {
     if (!isModelSupported(override)) {
       return { 
         isValid: false, 
-        error: `Model '${override}' is not supported. Supported models: ${Object.keys(require('../lib/modelConfig.js').MODELS).join(', ')}` 
+        error: `Model '${override}' is not supported. Supported models: ${Object.keys(MODELS).join(', ')}` 
       };
     }
     return { isValid: true, model: override };

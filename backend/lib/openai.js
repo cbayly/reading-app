@@ -177,7 +177,7 @@ You are an expert children's storyteller creating a 3-chapter story for a ${stud
 🚨 CRITICAL REQUIREMENTS - READ CAREFULLY 🚨
 
 📏 LENGTH REQUIREMENTS (NON-NEGOTIABLE):
-- Each chapter MUST be EXACTLY 300-500 words
+- Each chapter MUST be EXACTLY 300-500 words (MINIMUM 300 words)
 - Count every word carefully before submitting
 - Stories under 300 words will be automatically rejected and regenerated
 - This is a strict requirement - do not submit short chapters

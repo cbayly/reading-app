@@ -20,6 +20,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <script src="/dom-patch.js" />
+      </head>
       <body className={geistSans.variable} suppressHydrationWarning={true}>
         <AuthProvider>{children}</AuthProvider>
       </body>

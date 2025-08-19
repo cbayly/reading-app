@@ -113,15 +113,21 @@ export default function AssessmentQuestionsPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-red-600 mb-4">Error</h2>
-          <p className="text-gray-600 mb-4">{error}</p>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <div className="w-full max-w-lg">
+          <div className="p-4 border rounded-lg bg-red-50 border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-200 mb-4" role="alert">
+            <div className="flex items-start">
+              <svg className="h-5 w-5 mt-0.5 me-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.72-1.36 3.485 0l6.518 11.594c.75 1.336-.213 3.007-1.742 3.007H3.48c-1.53 0-2.492-1.67-1.743-3.007L8.257 3.1zM11 14a1 1 0 10-2 0 1 1 0 002 0zm-1-2a1 1 0 01-1-1V7a1 1 0 112 0v4a1 1 0 01-1 1z" clipRule="evenodd"/></svg>
+              <div>
+                <p className="text-sm">{error}</p>
+              </div>
+            </div>
+          </div>
           <button
             onClick={() => router.back()}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
-            Go Back
+            Back to previous step
           </button>
         </div>
       </div>
@@ -148,6 +154,7 @@ export default function AssessmentQuestionsPage() {
   const questions = assessment.questions as Question[];
   const currentQuestion = questions[currentQuestionIndex];
   const isLastQuestion = currentQuestionIndex === questions.length - 1;
+  const firstName = assessment?.student?.name?.split(' ')[0] || assessment?.student?.name;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -156,10 +163,10 @@ export default function AssessmentQuestionsPage() {
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">
-              {assessment.student?.name}&apos;s Reading Assessment
+              {firstName}&apos;s Reading Assessment
             </h1>
             <p className="text-gray-600">
-              Let&apos;s check {assessment.student?.name}&apos;s understanding of the passage
+              Let&apos;s check {firstName}&apos;s understanding of the passage
             </p>
           </div>
         </div>

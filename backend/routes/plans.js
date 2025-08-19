@@ -525,7 +525,19 @@ router.post('/generate', authenticate, modelOverrideMiddleware(), async (req, re
       orderBy: { createdAt: 'desc' }
     });
 
-    if (existingPlan) {
+    // If a recent plan exists and force regeneration was requested, remove it first
+    if (existingPlan && req.body?.force === true) {
+      console.log('⚠️  Force regenerate requested. Deleting existing plan before creating a new one.', {
+        studentId,
+        existingPlanId: existingPlan.id
+      });
+
+      await prisma.$transaction(async (tx) => {
+        await tx.dailyActivity.deleteMany({ where: { planId: existingPlan.id } });
+        await tx.chapter.deleteMany({ where: { planId: existingPlan.id } });
+        await tx.weeklyPlan.delete({ where: { id: existingPlan.id } });
+      });
+    } else if (existingPlan) {
       // Return existing plan
       return res.status(200).json({
         plan: existingPlan,
@@ -565,6 +577,7 @@ router.post('/generate', authenticate, modelOverrideMiddleware(), async (req, re
     const completePlan = await prisma.weeklyPlan.findUnique({
       where: { id: weeklyPlan.id },
       include: {
+        student: true,
         chapters: {
           orderBy: { chapterNumber: 'asc' }
         },
@@ -605,6 +618,7 @@ router.get('/:studentId', authenticate, async (req, res) => {
     const weeklyPlan = await prisma.weeklyPlan.findFirst({
       where: { studentId: parseInt(studentId) },
       include: {
+        student: true,
         chapters: {
           orderBy: { chapterNumber: 'asc' }
         },

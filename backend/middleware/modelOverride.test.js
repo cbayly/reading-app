@@ -21,16 +21,23 @@ import {
 import { CONTENT_TYPES } from '../lib/logging.js';
 
 // Mock the modelConfig module
+const mockGetModelConfig = jest.fn();
+const mockIsModelSupported = jest.fn();
+const mockGetOverrideStatus = jest.fn();
+
 jest.mock('../lib/modelConfig.js', () => ({
-  getModelConfig: jest.fn(),
-  isModelSupported: jest.fn(),
-  getOverrideStatus: jest.fn(),
+  getModelConfig: mockGetModelConfig,
+  isModelSupported: mockIsModelSupported,
+  getOverrideStatus: mockGetOverrideStatus,
   MODELS: {
     'gpt-4o': { name: 'GPT-4o' },
     'gpt-4-turbo': { name: 'GPT-4-turbo' },
     'gpt-3.5-turbo': { name: 'GPT-3.5-turbo' }
   }
 }));
+
+// Import mocked modules
+import * as modelConfig from '../lib/modelConfig.js';
 
 // Mock the logging module
 jest.mock('../lib/logging.js', () => ({
@@ -181,13 +188,12 @@ describe('Model Override Middleware', () => {
       middleware(mockReq, mockRes, mockNext);
       
       // Mock the modelConfig module
-      const { getModelConfig, isModelSupported } = require('../lib/modelConfig.js');
-      getModelConfig.mockReturnValue({
+      mockGetModelConfig.mockReturnValue({
         model: 'gpt-4-turbo',
         temperature: 0.7,
         maxTokens: 3000
       });
-      isModelSupported.mockReturnValue(true);
+      mockIsModelSupported.mockReturnValue(true);
       
       const result = mockReq.applyModelOverride('story_creation', {
         model: 'gpt-4-turbo',
@@ -211,8 +217,7 @@ describe('Model Override Middleware', () => {
       const middleware = modelOverrideMiddleware();
       middleware(mockReq, mockRes, mockNext);
       
-      const { isModelSupported } = require('../lib/modelConfig.js');
-      isModelSupported.mockReturnValue(true);
+      mockIsModelSupported.mockReturnValue(true);
       
       const result = mockReq.applyModelOverride('story_creation', {
         model: 'gpt-4-turbo',
@@ -231,8 +236,7 @@ describe('Model Override Middleware', () => {
       const middleware = modelOverrideMiddleware({ strict: true });
       middleware(mockReq, mockRes, mockNext);
       
-      const { isModelSupported } = require('../lib/modelConfig.js');
-      isModelSupported.mockReturnValue(false);
+      mockIsModelSupported.mockReturnValue(false);
       
       expect(() => {
         mockReq.applyModelOverride('story_creation', {
@@ -250,8 +254,7 @@ describe('Model Override Middleware', () => {
       const middleware = modelOverrideMiddleware({ strict: false });
       middleware(mockReq, mockRes, mockNext);
       
-      const { isModelSupported } = require('../lib/modelConfig.js');
-      isModelSupported.mockReturnValue(false);
+      mockIsModelSupported.mockReturnValue(false);
       
       const result = mockReq.applyModelOverride('story_creation', {
         model: 'gpt-4-turbo',
@@ -270,15 +273,14 @@ describe('Model Override Middleware', () => {
 
   describe('Helper functions', () => {
     test('getModelConfigWithOverride should work without override', () => {
-      const { getModelConfig } = require('../lib/modelConfig.js');
-      getModelConfig.mockReturnValue({
-        model: 'gpt-4-turbo',
+      mockGetModelConfig.mockReturnValue({
+        model: 'gpt-4o',
         temperature: 0.7
       });
       
       const result = getModelConfigWithOverride(mockReq, 'story_creation');
       
-      expect(result.model).toBe('gpt-4-turbo');
+      expect(result.model).toBe('gpt-4o');
     });
 
     test('getModelConfigWithOverride should apply override when present', () => {
@@ -287,12 +289,11 @@ describe('Model Override Middleware', () => {
       const middleware = modelOverrideMiddleware();
       middleware(mockReq, mockRes, mockNext);
       
-      const { getModelConfig, isModelSupported } = require('../lib/modelConfig.js');
-      getModelConfig.mockReturnValue({
+      mockGetModelConfig.mockReturnValue({
         model: 'gpt-4-turbo',
         temperature: 0.7
       });
-      isModelSupported.mockReturnValue(true);
+      mockIsModelSupported.mockReturnValue(true);
       
       const result = getModelConfigWithOverride(mockReq, 'story_creation');
       
@@ -330,8 +331,7 @@ describe('Model Override Middleware', () => {
       const middleware = modelOverrideMiddleware();
       middleware(mockReq, mockRes, mockNext);
       
-      const { isModelSupported } = require('../lib/modelConfig.js');
-      isModelSupported.mockReturnValue(true);
+      mockIsModelSupported.mockReturnValue(true);
       
       mockReq.applyModelOverride('story_creation', {
         model: 'gpt-4-turbo',
@@ -351,8 +351,7 @@ describe('Model Override Middleware', () => {
       const middleware = modelOverrideMiddleware();
       middleware(mockReq, mockRes, mockNext);
       
-      const { isModelSupported } = require('../lib/modelConfig.js');
-      isModelSupported.mockReturnValue(true);
+      mockIsModelSupported.mockReturnValue(true);
       
       mockReq.applyModelOverride('story_creation', {
         model: 'gpt-4-turbo',
@@ -375,13 +374,12 @@ describe('Model Override Middleware', () => {
       middleware(mockReq, mockRes, mockNext);
       
       // Mock dependencies
-      const { getModelConfig, isModelSupported } = require('../lib/modelConfig.js');
-      getModelConfig.mockReturnValue({
+      mockGetModelConfig.mockReturnValue({
         model: 'gpt-4-turbo',
         temperature: 0.7,
         maxTokens: 3000
       });
-      isModelSupported.mockReturnValue(true);
+      mockIsModelSupported.mockReturnValue(true);
       
       // Apply override
       const result = mockReq.applyModelOverride('story_creation', {
@@ -412,8 +410,7 @@ describe('Model Override Middleware', () => {
       const middleware = modelOverrideMiddleware();
       middleware(mockReq, mockRes, mockNext);
       
-      const { isModelSupported } = require('../lib/modelConfig.js');
-      isModelSupported.mockReturnValue(true);
+      mockIsModelSupported.mockReturnValue(true);
       
       // Apply overrides for different content types
       const storyResult = mockReq.applyModelOverride('story_creation', {

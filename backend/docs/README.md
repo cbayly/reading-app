@@ -58,6 +58,51 @@ LOG_MODEL_OVERRIDES=true
 - **Environment Safety**: Automatic disable in production
 - **Comprehensive Logging**: Track model usage and performance
 
+### Scoring Logic v2 (Feature Flag)
+
+- **Flag**: `SCORE_V2_ENABLED` (default: false)
+- **Tunables**:
+  - `FLUENCY_CAP` (default: 150)
+  - `ACCURACY_HARD_FLOOR` (optional integer percent, e.g., 93)
+- **Notes**:
+  - When enabled, assessment submission uses floors per PRD to assign labels
+  - API response fields remain unchanged
+  - Structured scoring logs are emitted to console for observability
+  - Minimal rollout counters summarize label distribution for v1/v2
+
+Example env block:
+
+```env
+# Scoring Logic v2
+SCORE_V2_ENABLED=false
+FLUENCY_CAP=150
+# ACCURACY_HARD_FLOOR=93
+```
+
+#### Flag control instructions
+
+- Toggle at runtime via environment variable `SCORE_V2_ENABLED` (string `"true"`/`"false"`).
+- For one-off local runs:
+
+```bash
+SCORE_V2_ENABLED=true npm start
+```
+
+- For tests inside this repo, integration tests set the env variable directly to validate on/off behavior.
+
+#### Monitoring checklist
+
+- Confirm console emits `📏 Scoring Metrics` entries on each submission with fields: flag, F, C, Composite, label, floors, capEngaged, accuracyHardFloorApplied.
+- Observe periodic `📈 Scoring Summary (rollout counters)` logs (every 10 events) to review label distribution by v1 vs v2.
+- Spot check for unexpected spikes in `Below` or `Above` labels after enabling v2.
+- Validate average composite and label distribution over a day looks reasonable vs. prior runs.
+
+#### Rollback steps
+
+1. Set `SCORE_V2_ENABLED=false` and redeploy.
+2. No schema or API changes are required; v1 and v2 return identical fields.
+3. Continue to monitor `📏 Scoring Metrics` to confirm v1 is active (`useV2:false`).
+
 ### Content Generation
 
 - **Story Creation**: 3-chapter short stories with GPT-4o

@@ -3,7 +3,7 @@ import Cookies from 'js-cookie';
 import { GeneratePlanRequest, GenerateActivityRequest, SaveActivityResponseRequest } from '@/types/weekly-plan';
 
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5050/api',
+  baseURL: process.env.NEXT_PUBLIC_API_URL || '/api',
   headers: {
     'Content-Type': 'application/json',
   },
@@ -17,6 +17,22 @@ api.interceptors.request.use((config) => {
   }
   return config;
 });
+
+// Redirect to login on Unauthorized responses
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error?.response?.status === 401) {
+      try {
+        Cookies.remove('token');
+      } catch {}
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
 
 export const getAssessments = async () => {
   const response = await api.get('/assessments');
@@ -38,9 +54,19 @@ export const updateStudent = async (studentId: number, studentData: any) => {
   return response.data;
 };
 
+export const getStudent = async (studentId: number) => {
+  const response = await api.get(`/students/${studentId}`);
+  return response.data;
+};
+
 // Weekly Plan API functions
 export const generatePlan = async (studentId: number) => {
   const response = await api.post('/plans/generate', { studentId });
+  return response.data;
+};
+
+export const regeneratePlan = async (studentId: number) => {
+  const response = await api.post('/plans/generate', { studentId, force: true });
   return response.data;
 };
 

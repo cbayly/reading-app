@@ -68,6 +68,8 @@ export default function AssessmentResultsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showQuestionAnalysis, setShowQuestionAnalysis] = useState(false);
+  const [creatingPlan, setCreatingPlan] = useState(false);
+  const [planCreated, setPlanCreated] = useState(false);
 
   useEffect(() => {
     const fetchAssessment = async () => {
@@ -92,6 +94,33 @@ export default function AssessmentResultsPage() {
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleCreateWeeklyPlan = async () => {
+    if (!assessment?.student?.id) {
+      setError('Student information not available');
+      return;
+    }
+
+    setCreatingPlan(true);
+    try {
+      const response = await api.post('/plans/generate', { 
+        studentId: assessment.student.id 
+      });
+      
+      if (response.data && response.data.plan && response.data.plan.id) {
+        setPlanCreated(true);
+        // Navigate to the weekly plan page
+        router.push(`/plan/${response.data.plan.id}`);
+      } else {
+        throw new Error('Invalid response format from server');
+      }
+    } catch (err) {
+      console.error('Error creating weekly plan:', err);
+      setError('Failed to create weekly plan. Please try again.');
+    } finally {
+      setCreatingPlan(false);
+    }
   };
 
   if (loading) {
@@ -172,8 +201,7 @@ export default function AssessmentResultsPage() {
     comprehensionScore
   );
 
-
-
+  const firstName = assessment?.student?.name?.split(' ')[0] || assessment?.student?.name;
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -182,10 +210,10 @@ export default function AssessmentResultsPage() {
           <div className="flex justify-between items-center">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">
-                {assessment.student?.name}&apos;s Reading Results
+                {firstName}&apos;s Reading Results
               </h1>
               <p className="text-gray-600">
-                Here&apos;s how {assessment.student?.name} did on their assessment
+                Here&apos;s how {firstName} did on their assessment
               </p>
             </div>
           </div>
@@ -420,6 +448,55 @@ export default function AssessmentResultsPage() {
                 </>
               );
             })()}
+          </div>
+
+          {/* Weekly Plan Creation */}
+          <div className="mt-8 pt-8 border-t border-gray-200">
+            <div className="text-center">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Next Steps
+              </h3>
+              <p className="text-gray-600 mb-6">
+                Based on {firstName}&apos;s assessment results, you can now create a personalized weekly reading plan.
+              </p>
+              
+              <button
+                onClick={handleCreateWeeklyPlan}
+                disabled={creatingPlan || planCreated}
+                className={`px-6 py-3 rounded-lg font-medium transition-colors ${
+                  creatingPlan || planCreated
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-green-600 text-white hover:bg-green-700'
+                }`}
+              >
+                {creatingPlan ? (
+                  <div className="flex items-center">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Creating Weekly Plan...
+                  </div>
+                ) : planCreated ? (
+                  <div className="flex items-center">
+                    <span className="mr-2">✓</span>
+                    Weekly Plan Created!
+                  </div>
+                ) : (
+                  <div className="flex items-center">
+                    <span className="mr-2">📚</span>
+                    Create Weekly Reading Plan
+                  </div>
+                )}
+              </button>
+              
+              {error && (
+                <p className="text-red-600 mt-4 text-sm">
+                  {error}
+                </p>
+              )}
+              
+              <p className="text-sm text-gray-500 mt-4">
+                The weekly plan will be tailored to {firstName}&apos;s reading level and interests.
+              </p>
+            </div>
           </div>
         </div>
       </div>

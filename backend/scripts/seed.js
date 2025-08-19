@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { hashPassword } from '../lib/password.js';
 
 const prisma = new PrismaClient();
 
@@ -23,16 +24,29 @@ async function main() {
       data: {
         name: 'Cam',
         email: 'cam@example.com',
-        passwordHash: 'dummy_hash_for_seeding'
+        // Set a known dev password and store a proper bcrypt hash
+        passwordHash: await hashPassword('password123')
       }
     });
     
     console.log(`✅ Created parent: ${newParent.name} (ID: ${newParent.id})`);
   }
 
-  const parentId = camParent?.id || (await prisma.parent.findFirst({
+  // If Cam exists but has an invalid non-bcrypt password hash from older seeds,
+  // update it to a valid hash so login works in development.
+  const existingCam = camParent || (await prisma.parent.findFirst({
     where: { name: 'Cam' }
-  })).id;
+  }));
+
+  if (existingCam && !String(existingCam.passwordHash || '').startsWith('$2')) {
+    console.log('🔧 Fixing Cam\'s password hash to a valid bcrypt hash...');
+    await prisma.parent.update({
+      where: { id: existingCam.id },
+      data: { passwordHash: await hashPassword('password123') }
+    });
+  }
+
+  const parentId = existingCam?.id;
 
   // Create Office characters (including existing ones and new ones)
   const officeStudents = [

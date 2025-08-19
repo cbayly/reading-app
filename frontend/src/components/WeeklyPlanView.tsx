@@ -43,7 +43,16 @@ export default function WeeklyPlanView({
   const dailyActivityStatus = (plan as any).dailyActivityStatus || [];
 
   const canGenerateActivity = (dayOfWeek: number) => {
+    // Check if activity already exists and has content
+    const existingActivity = plan.dailyActivities.find(a => a.dayOfWeek === dayOfWeek);
+    if (existingActivity && existingActivity.content) {
+      return false; // Activity already exists, don't show generate button
+    }
+    
+    // For Day 1, always allow generation
     if (dayOfWeek === 1) return true;
+    
+    // For other days, check if previous day is completed
     const previousDay = plan.dailyActivities.find(a => a.dayOfWeek === dayOfWeek - 1);
     return previousDay?.completed || false;
   };
@@ -77,7 +86,7 @@ export default function WeeklyPlanView({
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Weekly Reading Plan</h1>
             <p className="text-gray-600 mt-1">
-              {plan.student?.name && `For ${plan.student.name}`} • Theme: {plan.interestTheme}
+              {plan.student?.name ? `${plan.student.name.split(' ')[0]}'s ${plan.interestTheme} Adventure` : `Theme: ${plan.interestTheme}`}
             </p>
           </div>
         </div>

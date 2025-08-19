@@ -35,6 +35,7 @@ model Student {
   parent      Parent       @relation(fields: [parentId], references: [id], onDelete: Cascade)
   assessments Assessment[]
   weeklyPlans WeeklyPlan[]
+  genreHistory StudentGenreHistory[]
   
   @@map("students")
 }
@@ -75,6 +76,7 @@ model WeeklyPlan {
   id            Int      @id @default(autoincrement())
   studentId     Int      @map("student_id")
   interestTheme String   @map("interest_theme")
+  genreCombination String? @map("genre_combination") // e.g., "Futuristic Mystery"
   cachedPrompt  Json?    @map("cached_prompt")
   cachedOutput  Json?    @map("cached_output")
   createdAt     DateTime @default(now()) @map("created_at")
@@ -118,4 +120,29 @@ model DailyActivity {
   plan           WeeklyPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
   
   @@map("daily_activities")
+}
+
+model GenreWord {
+  id      Int     @id @default(autoincrement())
+  word    String  @unique
+  listType String @map("list_type") // 'A' for Setting/Style/Time, 'B' for Genre/Theme
+  minAge  Int?    @map("min_age") // Minimum age for this word to be appropriate
+  maxAge  Int?    @map("max_age") // Maximum age for this word to be appropriate
+  active  Boolean @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  @@map("genre_words")
+}
+
+model StudentGenreHistory {
+  id            Int      @id @default(autoincrement())
+  studentId     Int      @map("student_id")
+  genreCombination String @map("genre_combination") // e.g., "Futuristic Mystery"
+  usedAt        DateTime @default(now()) @map("used_at")
+  
+  // Relations
+  student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  
+  @@map("student_genre_history")
 }

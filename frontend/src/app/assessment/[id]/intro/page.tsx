@@ -84,14 +84,16 @@ export default function AssessmentIntroPage() {
     );
   }
 
+  const firstName = assessment?.student?.name?.split(' ')[0] || assessment.student.name;
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center py-12 px-4">
       <div className="max-w-3xl w-full">
         <h1 className="text-4xl font-bold text-center mb-4">
-          Ready for {assessment.student.name}&apos;s Reading Assessment?
+          Ready for {firstName}&apos;s Reading Assessment?
         </h1>
         <p className="text-xl text-gray-600 text-center mb-12">
-          Let&apos;s discover {assessment.student.name}&apos;s reading level and create a personalized learning plan.
+          Let&apos;s discover {firstName}&apos;s reading level and create a personalized learning plan.
         </p>
 
         <div className="bg-white rounded-lg shadow-sm border p-8 mb-8">
@@ -104,7 +106,7 @@ export default function AssessmentIntroPage() {
               </div>
               <h3 className="font-semibold mb-2">Personalized Passage</h3>
               <p className="text-gray-600">
-                {assessment.student.name} will read a passage tailored to their interests and reading level.
+                {firstName} will read a passage tailored to their interests and reading level.
               </p>
             </div>
 
@@ -124,7 +126,7 @@ export default function AssessmentIntroPage() {
               </div>
               <h3 className="font-semibold mb-2">Detailed Results</h3>
               <p className="text-gray-600">
-                Get comprehensive insights into {assessment.student.name}&apos;s reading strengths and areas for growth.
+                Get comprehensive insights into {firstName}&apos;s reading strengths and areas for growth.
               </p>
             </div>
           </div>
@@ -135,7 +137,7 @@ export default function AssessmentIntroPage() {
               Tips for Success
             </h3>
             <ul className="space-y-3 text-blue-800">
-              <li>• Find a quiet, comfortable space for {assessment.student.name}</li>
+              <li>• Find a quiet, comfortable space for {firstName}</li>
               <li>• Make sure they&apos;re well-rested and relaxed</li>
               <li>• Encourage them to read naturally, as they normally would</li>
               <li>• The assessment takes about 5-10 minutes to complete</li>

@@ -4,10 +4,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/lib/auth';
 import { getAssessments, createAssessment, deleteStudent, updateStudent } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
+import Toast from '@/components/ui/Toast';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import EditStudentModal from '@/components/EditStudentModal';
 import AssessmentLoadingScreen from '@/components/AssessmentLoadingScreen';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 interface Student {
   id: number;
@@ -23,10 +25,10 @@ interface Student {
 }
 
 export default function DashboardPage() {
-  const { user, logout } = useAuth();
+  const { user, logout, loading: authLoading } = useAuth();
   const router = useRouter();
   const [students, setStudents] = useState<Student[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [studentsLoading, setStudentsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [creatingAssessment, setCreatingAssessment] = useState<number | null>(null);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
@@ -35,47 +37,66 @@ export default function DashboardPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showLoadingScreen, setShowLoadingScreen] = useState(false);
   const [loadingStudentName, setLoadingStudentName] = useState('');
-  const [createdAssessmentId, setCreatedAssessmentId] = useState<number | null>(null);
-
-  // Define the loading screen completion callback at the top level
-  const handleLoadingComplete = useCallback(() => {
-    console.log('Loading screen onComplete called');
-    console.log('Current createdAssessmentId:', createdAssessmentId);
-    console.log('Current creatingAssessment:', creatingAssessment);
-    
-    setShowLoadingScreen(false);
-    setCreatingAssessment(null);
-    // Navigate to the assessment intro after loading completes
-    if (createdAssessmentId) {
-      console.log('Navigating to assessment intro:', createdAssessmentId);
-      router.push(`/assessment/${createdAssessmentId}/intro`);
-      setCreatedAssessmentId(null);
-    } else {
-      console.error('No assessment ID found for navigation');
-      console.error('State at completion:', { createdAssessmentId, creatingAssessment });
-      setError('Failed to create assessment. Please try again.');
-    }
-  }, [createdAssessmentId, creatingAssessment, router]);
+  const [toast, setToast] = useState<{open: boolean; message: string; type?: 'success'|'error'|'info'}>({open: false, message: ''});
+  
 
   useEffect(() => {
-    const fetchStudents = async () => {
-      try {
-        const data = await getAssessments();
-        console.log('Fetched students:', data);
-        setStudents(data);
-      } catch (err) {
-        console.error('Error fetching students:', err);
-        if (err instanceof Error) {
-          setError(err.message);
-        } else {
-          setError('Failed to load students');
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
+    console.log('Dashboard useEffect triggered, authLoading:', authLoading);
+    
+    // Only fetch if auth is loaded
+    if (!authLoading) {
+      console.log('Auth loading is false, starting to fetch students...');
+      setStudentsLoading(true);
+      
+      const fetchStudents = async () => {
+        try {
+          console.log('Starting to fetch students...');
+          // Debug: Check if user is authenticated
+          console.log('Current user:', user);
+          console.log('Auth loading state:', authLoading);
+          
+          // Debug: Check JWT token in cookies
+          const token = document.cookie
+            .split('; ')
+            .find(row => row.startsWith('token='))
+            ?.split('=')[1];
+          console.log('JWT token in cookie:', token ? 'Present' : 'Missing');
+          if (token) {
+            console.log('Token preview:', token.substring(0, 50) + '...');
+          }
 
-    fetchStudents();
+          const data = await getAssessments();
+          console.log('Fetched students:', data);
+          setStudents(data);
+        } catch (err) {
+          console.error('Error fetching students:', err);
+          console.error('Error details:', {
+            message: err instanceof Error ? err.message : 'Unknown error',
+            status: (err as { response?: { status?: number } })?.response?.status,
+            data: (err as { response?: { data?: unknown } })?.response?.data
+          });
+          if (err instanceof Error) {
+            setError(err.message);
+          } else {
+            setError('Failed to load students');
+          }
+        } finally {
+          setStudentsLoading(false);
+        }
+      };
+
+      fetchStudents();
+    } else {
+      console.log('Auth still loading, waiting...');
+    }
+  }, [authLoading]); // Depend on auth loading state
+
+  // Cleanup effect to ensure loading screen is hidden when component unmounts
+  useEffect(() => {
+    return () => {
+      setShowLoadingScreen(false);
+      setCreatingAssessment(null);
+    };
   }, []);
 
   const handleLogout = () => {
@@ -137,7 +158,7 @@ export default function DashboardPage() {
     }
   };
 
-  if (loading) {
+  if (authLoading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
@@ -149,7 +170,8 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <ErrorBoundary>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
       <header className="bg-white dark:bg-gray-800 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -177,8 +199,15 @@ export default function DashboardPage() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {error && (
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-6">
-            <p className="text-red-800 dark:text-red-200">{error}</p>
+          <div className="mb-6">
+            <div className="p-4 border rounded-lg bg-red-50 border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-200" role="alert">
+              <div className="flex items-start">
+                <svg className="h-5 w-5 mt-0.5 me-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.72-1.36 3.485 0l6.518 11.594c.75 1.336-.213 3.007-1.742 3.007H3.48c-1.53 0-2.492-1.67-1.743-3.007L8.257 3.1zM11 14a1 1 0 10-2 0 1 1 0 002 0zm-1-2a1 1 0 01-1-1V7a1 1 0 112 0v4a1 1 0 01-1 1z" clipRule="evenodd"/></svg>
+                <div>
+                  <p className="text-sm">{error}</p>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
@@ -244,7 +273,7 @@ export default function DashboardPage() {
                     <div className="space-y-2">
                       {hasCompletedAssessment ? (
                         <>
-                          <Button
+                           <Button
                             className="w-full"
                             onClick={() => router.push(`/assessment/${latestAssessment.id}/results`)}
                           >
@@ -288,18 +317,22 @@ export default function DashboardPage() {
                                 throw new Error('Invalid assessment response from server');
                               }
                               
-                              console.log('Setting createdAssessmentId to:', assessment.id);
-                              setCreatedAssessmentId(assessment.id);
-                              // Loading screen will handle the transition
+                              // Navigate immediately after successful creation to avoid race with loader timer
+                              router.push(`/assessment/${assessment.id}/intro`);
+                              // Clean up loader/state
+                               setShowLoadingScreen(false);
+                              setCreatingAssessment(null);
+                               setToast({open: true, message: 'Assessment created successfully', type: 'success'});
                             } catch (err) {
                               console.error('Error creating assessment:', err);
                               setShowLoadingScreen(false);
                               setCreatingAssessment(null);
-                              setCreatedAssessmentId(null);
                               if (err instanceof Error) {
                                 setError(err.message);
+                                 setToast({open: true, message: err.message, type: 'error'});
                               } else {
                                 setError('Failed to create assessment');
+                                 setToast({open: true, message: 'Failed to create assessment', type: 'error'});
                               }
                             }
                           }}
@@ -332,8 +365,10 @@ export default function DashboardPage() {
       <AssessmentLoadingScreen
         studentName={loadingStudentName}
         isVisible={showLoadingScreen}
-        onComplete={handleLoadingComplete}
+        // No onComplete handler to avoid race; navigation happens on API success
       />
-    </div>
+      <Toast open={toast.open} onClose={() => setToast({open:false,message:''})} message={toast.message} type={toast.type}/>
+      </div>
+    </ErrorBoundary>
   );
 } 

@@ -18,6 +18,26 @@ body {
 @tailwind components;
 @tailwind utilities;
 
+/* Prevent autofill overlay errors by hiding problematic autofill dropdowns */
+[id*="bootstrap-autofill"],
+[class*="bootstrap-autofill"],
+[id*="autofill-overlay"],
+[class*="autofill-overlay"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Additional protection for browser autofill overlays */
+input[data-autofill-protected="true"]::-webkit-autofill-strong-password {
+  display: none !important;
+}
+
+input[data-autofill-protected="true"]::-webkit-credentials-auto-fill-button {
+  display: none !important;
+}
+
 html {
   @apply transition-colors duration-300;
 }

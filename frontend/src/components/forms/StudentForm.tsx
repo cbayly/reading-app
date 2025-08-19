@@ -64,6 +64,15 @@ export function StudentForm() {
     }
   }, [currentStudent.birthday]);
 
+  // Cleanup effect to ensure loading screen is hidden when component unmounts
+  useEffect(() => {
+    return () => {
+      setShowLoadingScreen(false);
+      setIsSubmitting(false);
+      setCreatedAssessmentId(null);
+    };
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -299,16 +308,18 @@ export function StudentForm() {
         studentName={loadingStudentName}
         isVisible={showLoadingScreen}
         onComplete={() => {
-          setShowLoadingScreen(false);
           setIsSubmitting(false);
           // Navigate to the assessment intro after loading completes
           if (createdAssessmentId) {
             console.log('Navigating to assessment intro:', createdAssessmentId);
             router.push(`/assessment/${createdAssessmentId}/intro`);
             setCreatedAssessmentId(null);
+            // Keep loading screen visible until navigation completes
+            // The loading screen will be hidden when the component unmounts
           } else {
             console.error('No assessment ID found for navigation');
             setError('Failed to create assessment. Please try again.');
+            setShowLoadingScreen(false);
           }
         }}
       />

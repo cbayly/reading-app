@@ -816,3 +816,145 @@ describe('Integration Tests', () => {
     );
   });
 }); 
+
+  describe('Content type specific logging', () => {
+    test('should log story creation requests correctly', async () => {
+      const mockAIResponse = {
+        choices: [{ message: { content: 'Test story content' } }],
+        usage: { prompt_tokens: 100, completion_tokens: 200, total_tokens: 300 }
+      };
+
+      const result = await logAIRequestWithCapture({
+        contentType: CONTENT_TYPES.STORY_CREATION,
+        aiFunction: async () => mockAIResponse,
+        modelConfig: { model: 'gpt-4o', temperature: 0.7 },
+        metadata: { studentId: 1, studentName: 'Test Student' }
+      });
+
+      expect(result).toBeDefined();
+      expect(result.result).toEqual(mockAIResponse);
+    });
+
+      test('should log assessment creation requests correctly', async () => {
+      const mockAIResponse = {
+        choices: [{ message: { content: 'Test assessment content' } }],
+        usage: { prompt_tokens: 150, completion_tokens: 250, total_tokens: 400 }
+      };
+
+      const result = await logAIRequestWithCapture({
+        contentType: CONTENT_TYPES.ASSESSMENT_CREATION,
+        aiFunction: async () => mockAIResponse,
+        modelConfig: { model: 'gpt-4-turbo', temperature: 0.7 },
+        metadata: { studentId: 1, studentName: 'Test Student' }
+      });
+
+      expect(result).toBeDefined();
+      expect(result.result).toEqual(mockAIResponse);
+    });
+
+      test('should log daily task generation requests correctly', async () => {
+      const mockAIResponse = {
+        choices: [{ message: { content: 'Test daily task content' } }],
+        usage: { prompt_tokens: 80, completion_tokens: 120, total_tokens: 200 }
+      };
+
+      const result = await logAIRequestWithCapture({
+        contentType: CONTENT_TYPES.DAILY_TASK_GENERATION,
+        aiFunction: async () => mockAIResponse,
+        modelConfig: { model: 'gpt-4-turbo', temperature: 0.7 },
+        metadata: { studentId: 1, studentName: 'Test Student' }
+      });
+
+      expect(result).toBeDefined();
+      expect(result.result).toEqual(mockAIResponse);
+    });
+
+      test('should capture different token usage for different content types', async () => {
+      const storyResponse = {
+        choices: [{ message: { content: 'Long story content' } }],
+        usage: { prompt_tokens: 200, completion_tokens: 500, total_tokens: 700 }
+      };
+
+      const assessmentResponse = {
+        choices: [{ message: { content: 'Assessment content' } }],
+        usage: { prompt_tokens: 150, completion_tokens: 300, total_tokens: 450 }
+      };
+
+      const storyResult = await logAIRequestWithCapture({
+        contentType: CONTENT_TYPES.STORY_CREATION,
+        aiFunction: async () => storyResponse,
+        modelConfig: { model: 'gpt-4o', temperature: 0.7 },
+        metadata: { studentId: 1 }
+      });
+
+      const assessmentResult = await logAIRequestWithCapture({
+        contentType: CONTENT_TYPES.ASSESSMENT_CREATION,
+        aiFunction: async () => assessmentResponse,
+        modelConfig: { model: 'gpt-4-turbo', temperature: 0.7 },
+        metadata: { studentId: 1 }
+      });
+
+      expect(storyResult).toBeDefined();
+      expect(assessmentResult).toBeDefined();
+      expect(storyResult.result.usage.total_tokens).toBe(700);
+      expect(assessmentResult.result.usage.total_tokens).toBe(450);
+    });
+
+      test('should log model-specific information correctly', async () => {
+      const mockAIResponse = {
+        choices: [{ message: { content: 'Test content' } }],
+        usage: { prompt_tokens: 100, completion_tokens: 200, total_tokens: 300 }
+      };
+
+      const gpt4oResult = await logAIRequestWithCapture({
+        contentType: CONTENT_TYPES.STORY_CREATION,
+        aiFunction: async () => mockAIResponse,
+        modelConfig: { model: 'gpt-4o', temperature: 0.7 },
+        metadata: { studentId: 1 }
+      });
+
+      const gpt4TurboResult = await logAIRequestWithCapture({
+        contentType: CONTENT_TYPES.ASSESSMENT_CREATION,
+        aiFunction: async () => mockAIResponse,
+        modelConfig: { model: 'gpt-4-turbo', temperature: 0.7 },
+        metadata: { studentId: 1 }
+      });
+
+      expect(gpt4oResult).toBeDefined();
+      expect(gpt4TurboResult).toBeDefined();
+    });
+
+  test('should capture timing information for different content types', async () => {
+    const mockAIResponse = {
+      choices: [{ message: { content: 'Test content' } }],
+      usage: { prompt_tokens: 100, completion_tokens: 200, total_tokens: 300 }
+    };
+
+    const storyResult = await logAIRequestWithCapture({
+      contentType: CONTENT_TYPES.STORY_CREATION,
+      aiFunction: async () => {
+        await new Promise(resolve => setTimeout(resolve, 10));
+        return mockAIResponse;
+      },
+      modelConfig: { model: 'gpt-4o', temperature: 0.7 },
+      metadata: { studentId: 1 }
+    });
+
+    const assessmentResult = await logAIRequestWithCapture({
+      contentType: CONTENT_TYPES.ASSESSMENT_CREATION,
+      aiFunction: async () => {
+        await new Promise(resolve => setTimeout(resolve, 5));
+        return mockAIResponse;
+      },
+      modelConfig: { model: 'gpt-4-turbo', temperature: 0.7 },
+      metadata: { studentId: 1 }
+    });
+
+    expect(storyResult).toBeDefined();
+    expect(assessmentResult).toBeDefined();
+    expect(storyResult.timing).toBeDefined();
+    expect(assessmentResult.timing).toBeDefined();
+    expect(storyResult.timing.duration).toBeGreaterThan(0);
+    expect(assessmentResult.timing.duration).toBeGreaterThan(0);
+  });
+}); 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/Button';
@@ -10,16 +10,51 @@ export function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { login } = useAuth();
   const router = useRouter();
+  const formRef = useRef<HTMLFormElement>(null);
+
+  // Cleanup effect to prevent autofill overlay errors
+  useEffect(() => {
+    return () => {
+      // Remove autofill overlays to avoid insertBefore errors
+      const selectors = [
+        '.bootstrap-autofill-overlay',
+        '[id*="bootstrap-autofill"]',
+        '[class*="bootstrap-autofill"]',
+        '[id*="autofill-overlay"]',
+        '[class*="autofill-overlay"]'
+      ];
+      
+      selectors.forEach(selector => {
+        try {
+          document.querySelectorAll(selector).forEach(el => {
+            if (el && el.parentNode) {
+              el.parentNode.removeChild(el);
+            }
+          });
+        } catch (err) {
+          console.warn('Error cleaning up autofill overlays:', err);
+        }
+      });
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setIsSubmitting(true);
+    
     try {
       await login(email, password);
-      router.push('/dashboard');
+      
+      // Add a small delay to allow autofill overlays to settle before navigation
+      setTimeout(() => {
+        router.push('/dashboard');
+      }, 100);
     } catch (err) {
+      setIsSubmitting(false);
       if (err instanceof Error) {
         setError(err.message);
       } else {
@@ -29,7 +64,7 @@ export function LoginForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form ref={formRef} onSubmit={handleSubmit} className="space-y-6">
       <FormInput
         label="Email address"
         id="email"
@@ -55,8 +90,8 @@ export function LoginForm() {
         </div>
       </div>
       <div>
-        <Button type="submit" className="w-full">
-          Log In
+        <Button type="submit" className="w-full" disabled={isSubmitting}>
+          {isSubmitting ? 'Logging In...' : 'Log In'}
         </Button>
       </div>
     </form>

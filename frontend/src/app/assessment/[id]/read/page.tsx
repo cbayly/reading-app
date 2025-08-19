@@ -91,6 +91,8 @@ export default function AssessmentReadPage() {
     );
   }
 
+  const firstName = assessment?.student?.name?.split(' ')[0] || assessment?.student?.name;
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -102,7 +104,7 @@ export default function AssessmentReadPage() {
                 Reading Assessment
               </h1>
               <p className="text-gray-600">
-                {assessment.student?.name}&apos;s Reading Test
+                {firstName}&apos;s Reading Test
               </p>
             </div>
             <button
@@ -123,13 +125,13 @@ export default function AssessmentReadPage() {
         <div className="bg-white rounded-lg shadow-sm border p-8">
           <div className="mb-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">
-              {assessment.student?.name}&apos;s Reading Passage
+              {firstName}&apos;s Reading Passage
             </h2>
           </div>
 
           <PassageReader
             passage={assessment.passage}
-            studentName={assessment.student?.name}
+            studentName={firstName}
             onComplete={handleReadingComplete}
           />
         </div>

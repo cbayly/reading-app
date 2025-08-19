@@ -3,6 +3,8 @@ import { PrismaClient } from '@prisma/client';
 import { authenticate } from '../middleware/auth.js';
 import { generateAssessment } from '../lib/openai.js';
 import { modelOverrideMiddleware, getModelConfigWithOverride } from '../middleware/modelOverride.js';
+import { scoreV1, scoreV2 } from '../lib/scoring.js';
+import { logScoringMetrics } from '../lib/logging.js';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -163,6 +165,7 @@ router.get('/:id', authenticate, async (req, res) => {
         readingLevelLabel: true,
         student: {
           select: {
+            id: true,
             name: true,
           },
         },
@@ -223,11 +226,9 @@ router.put('/:id/submit', authenticate, async (req, res) => {
       });
     }
 
-    // Calculate base metrics
+    // Calculate base metrics and validate
     const wordCount = assessment.passage.split(/\s+/).length;
     const minutes = readingTime / 60;
-    
-    // Check for invalid attempt
     if (minutes < 0.5 || wordCount < 50) {
       return res.status(400).json({ 
         message: 'Reading attempt too short to score accurately',
@@ -236,62 +237,51 @@ router.put('/:id/submit', authenticate, async (req, res) => {
       });
     }
 
-    const wpm = Math.round(wordCount / minutes);
-    const accuracyPercent = ((wordCount - errorCount) / wordCount) * 100;
+    // Use scoring module with feature flag and tunables
+    const useV2 = process.env.SCORE_V2_ENABLED === 'true';
+    const tunables = {
+      fluencyCap: Number(process.env.FLUENCY_CAP) || 150,
+      accuracyHardFloor: process.env.ACCURACY_HARD_FLOOR ? Number(process.env.ACCURACY_HARD_FLOOR) : null,
+    };
 
-    // Calculate fluency score
-    const fluencyNormalized = (wpm / benchmark.wpm) * 100;
-    const cappedFluencyNormalized = Math.min(fluencyNormalized, 150);
-    const fluencyScore = Math.round(cappedFluencyNormalized * (accuracyPercent / 100));
-
-    // Calculate comprehension and vocabulary scores
-    const questions = assessment.questions;
-    let comprehensionCorrect = 0;
-    let vocabularyCorrect = 0;
-    let comprehensionTotal = 0;
-    let vocabularyTotal = 0;
-    
-    Object.entries(answers).forEach(([index, answer]) => {
-      const question = questions[parseInt(index)];
-      if (question.type === 'comprehension') {
-        comprehensionTotal++;
-        if (question.correctAnswer === answer) {
-          comprehensionCorrect++;
-        }
-      } else if (question.type === 'vocabulary') {
-        vocabularyTotal++;
-        if (question.correctAnswer === answer) {
-          vocabularyCorrect++;
-        }
-      }
+    const scorer = useV2 ? scoreV2 : scoreV1;
+    const {
+      wpm,
+      accuracy: accuracyPercent,
+      fluencyScore,
+      compVocabScore,
+      compositeScore,
+      readingLevelLabel
+    } = scorer({
+      wordCount,
+      readingTime,
+      errorCount,
+      questions: assessment.questions,
+      answers,
+      benchmarkWpm: benchmark.wpm,
+      tunables,
     });
-    
-    // Calculate comp/vocab score with edge case handling
-    let compVocabScore = 0;
-    if (comprehensionTotal > 0 && vocabularyTotal > 0) {
-      const comprehensionPercent = (comprehensionCorrect / comprehensionTotal) * 100;
-      const vocabularyPercent = (vocabularyCorrect / vocabularyTotal) * 100;
-      compVocabScore = (comprehensionPercent + vocabularyPercent) / 2;
-    } else if (comprehensionTotal > 0) {
-      compVocabScore = (comprehensionCorrect / comprehensionTotal) * 100;
-    } else if (vocabularyTotal > 0) {
-      compVocabScore = (vocabularyCorrect / vocabularyTotal) * 100;
-    }
 
-    // Calculate composite score
-    const compositeScore = Math.round((fluencyScore * 0.5) + (compVocabScore * 0.5));
-
-    // Map to reading level
-    let readingLevelLabel;
-    if (compositeScore >= 150) {
-      readingLevelLabel = 'Above Grade Level';
-    } else if (compositeScore >= 120) {
-      readingLevelLabel = 'At Grade Level';
-    } else if (compositeScore >= 90) {
-      readingLevelLabel = 'Slightly Below Grade Level';
-    } else {
-      readingLevelLabel = 'Below Grade Level';
-    }
+    // Observability: log scoring metrics
+    const capEngaged = ((wpm / benchmark.wpm) * 100) > (tunables.fluencyCap || 150);
+    const floors = useV2 ? {
+      fAt: fluencyScore >= 85,
+      cAt: compVocabScore >= 75,
+      fAbove: fluencyScore >= 100,
+      cAbove: compVocabScore >= 85,
+    } : undefined;
+    logScoringMetrics({
+      useV2,
+      wpm,
+      accuracy: accuracyPercent,
+      fluencyScore,
+      compVocabScore,
+      compositeScore,
+      label: readingLevelLabel,
+      floors,
+      capEngaged,
+      accuracyHardFloorApplied: false, // v2 may downgrade; if needed, extend scoreV2 to return flag
+    });
 
     const updatedAssessment = await prisma.assessment.update({
       where: { id: parseInt(id) },
