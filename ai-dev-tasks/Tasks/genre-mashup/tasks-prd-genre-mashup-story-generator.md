@@ -18,7 +18,7 @@
 
 ## Tasks
 
-### 1.0 Design and implement database schema for genre system
+### 1.0 Design and implement database schema for genre system ✅
 
 - [x] 1.1 Add genre_words table to Prisma schema with columns: id, word, list_type (A or B), min_age, max_age, active
 - [x] 1.2 Add genre_combination field to WeeklyPlan table to track used combinations
@@ -28,15 +28,15 @@
 - [x] 1.6 Run seed script to populate database with genre words
 - [x] 1.7 Add unit tests for database schema and seed functionality
 
-### 2.0 Create genre selection and filtering logic
+### 2.0 Create genre selection and filtering logic ✅
 
-- [ ] 2.1 Create genreSelector.js utility module with core selection functions
-- [ ] 2.2 Implement selectRandomGenreCombination() function that picks from both lists
-- [ ] 2.3 Add age-appropriate filtering logic based on student grade level
-- [ ] 2.4 Implement avoidRecentCombinations() to prevent immediate repetition
-- [ ] 2.5 Add fallback logic for when all combinations have been recently used
-- [ ] 2.6 Create comprehensive unit tests for genreSelector.js
-- [ ] 2.7 Add integration tests for genre selection with database
+- [x] 2.1 Create genreSelector.js utility module with core selection functions
+- [x] 2.2 Implement selectRandomGenreCombination() function that picks from both lists
+- [x] 2.3 Add age-appropriate filtering logic based on student grade level
+- [x] 2.4 Implement avoidRecentCombinations() to prevent immediate repetition
+- [x] 2.5 Add fallback logic for when all combinations have been recently used
+- [x] 2.6 Create comprehensive unit tests for genreSelector.js
+- [x] 2.7 Add integration tests for genre selection with database
 
 ### 3.0 Integrate genre mash-up with existing story generation
 

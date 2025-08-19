@@ -12,4 +12,10 @@ export default {
   },
   transform: {},
   preset: undefined,
+  globals: {
+    'ts-jest': {
+      useESM: true,
+    },
+  },
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
 }; 
