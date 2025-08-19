@@ -48,15 +48,15 @@
 - [x] 3.6 Test story generation with various genre combinations
 - [x] 3.7 Verify story quality and age-appropriateness with genre integration
 
-### 4.0 Implement genre tracking and history management
+### 4.0 Implement genre tracking and history management ✅
 
-- [ ] 4.1 Create functions to record genre combinations in student_genre_history
-- [ ] 4.2 Implement cleanup logic to remove old history entries (older than 15 stories)
-- [ ] 4.3 Add genre combination tracking to WeeklyPlan creation process
-- [ ] 4.4 Create API endpoint to retrieve student's genre history for analytics
-- [ ] 4.5 Add database indexes for efficient genre history queries
-- [ ] 4.6 Test genre tracking with multiple students and story generations
-- [ ] 4.7 Add error handling for genre tracking failures
+- [x] 4.1 Create functions to record genre combinations in student_genre_history
+- [x] 4.2 Implement cleanup logic to remove old history entries (older than 15 stories)
+- [x] 4.3 Add genre combination tracking to WeeklyPlan creation process
+- [x] 4.4 Create API endpoint to retrieve student's genre history for analytics
+- [x] 4.5 Add database indexes for efficient genre history queries
+- [x] 4.6 Test genre tracking with multiple students and story generations
+- [x] 4.7 Add error handling for genre tracking failures
 
 ### 5.0 Add analytics and monitoring for genre variety
 

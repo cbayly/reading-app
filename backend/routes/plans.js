@@ -1011,4 +1011,86 @@ async function getPlanStatus(planId, prisma) {
   }
 }
 
+// GET /api/plans/:studentId/genre-history
+router.get('/:studentId/genre-history', authenticate, async (req, res) => {
+  const { studentId } = req.params;
+  const parentId = req.user.id;
+
+  try {
+    // Verify the student belongs to the authenticated parent
+    const student = await prisma.student.findFirst({
+      where: { id: parseInt(studentId), parentId }
+    });
+
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+
+    // Get genre history with analytics
+    const { getGenreVarietyStats } = await import('../lib/genreSelector.js');
+    
+    // Get recent genre history (last 20 entries)
+    const genreHistory = await prisma.studentGenreHistory.findMany({
+      where: { studentId: parseInt(studentId) },
+      orderBy: { usedAt: 'desc' },
+      take: 20,
+      select: {
+        genreCombination: true,
+        usedAt: true
+      }
+    });
+
+    // Get variety statistics
+    const varietyStats = await getGenreVarietyStats(parseInt(studentId));
+
+    // Calculate genre frequency
+    const genreFrequency = {};
+    genreHistory.forEach(entry => {
+      genreFrequency[entry.genreCombination] = (genreFrequency[entry.genreCombination] || 0) + 1;
+    });
+
+    // Get most and least used genres
+    const sortedGenres = Object.entries(genreFrequency)
+      .sort(([,a], [,b]) => b - a);
+    
+    const mostUsedGenres = sortedGenres.slice(0, 3).map(([genre, count]) => ({
+      genre,
+      count,
+      percentage: Math.round((count / genreHistory.length) * 100)
+    }));
+
+    const leastUsedGenres = sortedGenres.slice(-3).map(([genre, count]) => ({
+      genre,
+      count,
+      percentage: Math.round((count / genreHistory.length) * 100)
+    }));
+
+    res.status(200).json({
+      studentId: parseInt(studentId),
+      studentName: student.name,
+      genreHistory: genreHistory.map(entry => ({
+        ...entry,
+        usedAt: entry.usedAt.toISOString()
+      })),
+      analytics: {
+        totalCombinations: varietyStats.totalCombinations,
+        uniqueCombinations: varietyStats.uniqueCombinations,
+        varietyScore: varietyStats.varietyScore,
+        mostUsedGenres,
+        leastUsedGenres,
+        recentActivity: genreHistory.length > 0 ? {
+          lastUsed: genreHistory[0].usedAt.toISOString(),
+          lastGenre: genreHistory[0].genreCombination
+        } : null
+      }
+    });
+
+  } catch (error) {
+    ERROR_HANDLERS.handleRouteError(error, req, res, 'GENRE_HISTORY_RETRIEVAL', {
+      studentId: parseInt(studentId),
+      studentName: student?.name
+    });
+  }
+});
+
 export default router; 

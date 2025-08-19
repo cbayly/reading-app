@@ -135,15 +135,44 @@ async function getRecentGenreCombinations(studentId) {
  */
 export async function recordGenreCombination(studentId, combination) {
   try {
+    // Validate inputs
+    if (!studentId || !combination) {
+      throw new Error('Student ID and genre combination are required');
+    }
+
+    if (typeof combination !== 'string' || combination.trim().length === 0) {
+      throw new Error('Genre combination must be a non-empty string');
+    }
+
+    // Check if student exists
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
+      select: { id: true }
+    });
+
+    if (!student) {
+      throw new Error(`Student with ID ${studentId} not found`);
+    }
+
+    // Record the genre combination
     await prisma.studentGenreHistory.create({
       data: {
         studentId: studentId,
-        genreCombination: combination
+        genreCombination: combination.trim()
       }
     });
+
+    console.log(`Successfully recorded genre combination "${combination}" for student ${studentId}`);
   } catch (error) {
     console.error('Error recording genre combination:', error);
-    throw error;
+    
+    // Don't throw errors for tracking failures - just log them
+    // This prevents genre tracking issues from breaking story generation
+    if (error.code === 'P2002') {
+      console.warn('Duplicate genre combination entry detected - this is normal for rapid requests');
+    } else {
+      console.error('Genre tracking failed, but continuing with story generation');
+    }
   }
 }
 
@@ -154,6 +183,22 @@ export async function recordGenreCombination(studentId, combination) {
  */
 export async function cleanupOldGenreHistory(studentId) {
   try {
+    // Validate input
+    if (!studentId) {
+      throw new Error('Student ID is required');
+    }
+
+    // Check if student exists
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
+      select: { id: true }
+    });
+
+    if (!student) {
+      console.warn(`Student with ID ${studentId} not found for cleanup`);
+      return 0;
+    }
+
     // Get the 15th most recent entry to determine cutoff
     const cutoffEntry = await prisma.studentGenreHistory.findMany({
       where: { studentId: studentId },
@@ -177,10 +222,23 @@ export async function cleanupOldGenreHistory(studentId) {
       }
     });
 
+    if (result.count > 0) {
+      console.log(`Cleaned up ${result.count} old genre history entries for student ${studentId}`);
+    }
+
     return result.count;
   } catch (error) {
     console.error('Error cleaning up old genre history:', error);
-    throw error;
+    
+    // Don't throw errors for cleanup failures - just log them
+    // This prevents cleanup issues from breaking other functionality
+    if (error.code === 'P2025') {
+      console.warn('No records found for cleanup - this is normal for new students');
+    } else {
+      console.error('Genre history cleanup failed, but continuing with normal operation');
+    }
+    
+    return 0; // Return 0 to indicate no cleanup occurred
   }
 }
 
@@ -191,6 +249,26 @@ export async function cleanupOldGenreHistory(studentId) {
  */
 export async function getGenreVarietyStats(studentId) {
   try {
+    // Validate input
+    if (!studentId) {
+      throw new Error('Student ID is required');
+    }
+
+    // Check if student exists
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
+      select: { id: true }
+    });
+
+    if (!student) {
+      console.warn(`Student with ID ${studentId} not found for variety stats`);
+      return {
+        totalCombinations: 0,
+        uniqueCombinations: 0,
+        varietyScore: 0
+      };
+    }
+
     const allHistory = await prisma.studentGenreHistory.findMany({
       where: { studentId: studentId },
       select: { genreCombination: true }
@@ -207,7 +285,14 @@ export async function getGenreVarietyStats(studentId) {
     };
   } catch (error) {
     console.error('Error getting genre variety stats:', error);
-    throw error;
+    
+    // Return default values instead of throwing
+    // This prevents analytics failures from breaking other functionality
+    return {
+      totalCombinations: 0,
+      uniqueCombinations: 0,
+      varietyScore: 0
+    };
   }
 }
 

@@ -144,5 +144,9 @@ model StudentGenreHistory {
   // Relations
   student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   
+  // Indexes for efficient queries
+  @@index([studentId, usedAt(sort: Desc)])
+  @@index([genreCombination])
+  
   @@map("student_genre_history")
 }
