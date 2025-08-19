@@ -17,19 +17,26 @@ const prisma = new PrismaClient();
  */
 export async function selectRandomGenreCombination(studentId, studentAge) {
   try {
+    console.log(`🎭 Genre Selection: Starting for student ${studentId} (age ${studentAge})`);
+    
     // Get age-appropriate words from both lists
     const listAWords = await getAgeAppropriateWords('A', studentAge);
     const listBWords = await getAgeAppropriateWords('B', studentAge);
 
+    console.log(`📚 Available words - List A: ${listAWords.length}, List B: ${listBWords.length}`);
+
     if (listAWords.length === 0 || listBWords.length === 0) {
+      console.error(`❌ No age-appropriate genre words found for age ${studentAge}`);
       throw new Error('No age-appropriate genre words found');
     }
 
     // Get student's recent genre history
     const recentCombinations = await getRecentGenreCombinations(studentId);
+    console.log(`🔄 Recent combinations (${recentCombinations.length}): ${recentCombinations.slice(0, 3).join(', ')}${recentCombinations.length > 3 ? '...' : ''}`);
 
     // Find combinations that haven't been used recently
     const availableCombinations = [];
+    const totalPossibleCombinations = listAWords.length * listBWords.length;
     
     for (const wordA of listAWords) {
       for (const wordB of listBWords) {
@@ -44,15 +51,22 @@ export async function selectRandomGenreCombination(studentId, studentAge) {
       }
     }
 
+    console.log(`📊 Combination analysis: ${availableCombinations.length}/${totalPossibleCombinations} combinations available (${Math.round((availableCombinations.length / totalPossibleCombinations) * 100)}% unique)`);
+
     // If no unused combinations, use any combination (fallback)
     if (availableCombinations.length === 0) {
+      console.warn(`⚠️  No unique combinations available for student ${studentId}, using fallback selection`);
+      
       const randomWordA = listAWords[Math.floor(Math.random() * listAWords.length)];
       const randomWordB = listBWords[Math.floor(Math.random() * listBWords.length)];
+      const fallbackCombination = `${randomWordA} ${randomWordB}`;
+      
+      console.log(`🎲 Fallback selection: "${fallbackCombination}" (may be repeated)`);
       
       return {
         listAWord: randomWordA,
         listBWord: randomWordB,
-        combination: `${randomWordA} ${randomWordB}`
+        combination: fallbackCombination
       };
     }
 
@@ -61,10 +75,13 @@ export async function selectRandomGenreCombination(studentId, studentAge) {
       Math.floor(Math.random() * availableCombinations.length)
     ];
 
+    console.log(`✅ Selected unique combination: "${selectedCombination.combination}"`);
+    console.log(`📈 Selection outcome: ${availableCombinations.length} unique options available`);
+
     return selectedCombination;
 
   } catch (error) {
-    console.error('Error selecting genre combination:', error);
+    console.error('❌ Error selecting genre combination:', error);
     throw error;
   }
 }
@@ -162,7 +179,8 @@ export async function recordGenreCombination(studentId, combination) {
       }
     });
 
-    console.log(`Successfully recorded genre combination "${combination}" for student ${studentId}`);
+    console.log(`📝 Genre Tracking: Successfully recorded "${combination}" for student ${studentId}`);
+    console.log(`📊 Genre History: Student ${studentId} now has ${await prisma.studentGenreHistory.count({ where: { studentId } })} total genre combinations`);
   } catch (error) {
     console.error('Error recording genre combination:', error);
     

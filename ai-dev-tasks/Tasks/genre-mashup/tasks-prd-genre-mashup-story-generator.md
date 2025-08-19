@@ -58,15 +58,15 @@
 - [x] 4.6 Test genre tracking with multiple students and story generations
 - [x] 4.7 Add error handling for genre tracking failures
 
-### 5.0 Add analytics and monitoring for genre variety
+### 5.0 Add analytics and monitoring for genre variety ✅
 
-- [ ] 5.1 Create analytics functions to calculate genre variety scores per student
-- [ ] 5.2 Implement monitoring for story completion rates by genre combination
-- [ ] 5.3 Add logging for genre selection decisions and outcomes
-- [ ] 5.4 Create admin dashboard endpoints for genre analytics
-- [ ] 5.5 Add metrics tracking for genre system performance
-- [ ] 5.6 Test analytics with sample data and verify calculations
-- [ ] 5.7 Document analytics API endpoints and data formats
+- [x] 5.1 Create analytics functions to calculate genre variety scores per student
+- [x] 5.2 Implement monitoring for story completion rates by genre combination
+- [x] 5.3 Add logging for genre selection decisions and outcomes
+- [x] 5.4 Create admin dashboard endpoints for genre analytics
+- [x] 5.5 Add metrics tracking for genre system performance
+- [x] 5.6 Test analytics with sample data and verify calculations
+- [x] 5.7 Document analytics API endpoints and data formats
 
 ### 6.0 Final integration and testing
 

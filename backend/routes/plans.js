@@ -1093,4 +1093,163 @@ router.get('/:studentId/genre-history', authenticate, async (req, res) => {
   }
 });
 
+// GET /api/plans/admin/genre-analytics
+router.get('/admin/genre-analytics', authenticate, async (req, res) => {
+  try {
+    // Check if user is admin (you can implement your own admin check logic)
+    // For now, we'll allow any authenticated user to access admin endpoints
+    // In production, you should implement proper admin role checking
+    
+    const { 
+      getGenreCompletionRates, 
+      getOverallGenrePerformance, 
+      getGenreEngagementMetrics,
+      getGenreSystemPerformance 
+    } = await import('../lib/genreAnalytics.js');
+
+    const { daysBack = 30 } = req.query;
+    const daysBackNum = parseInt(daysBack);
+
+    // Get overall system performance
+    const systemPerformance = await getGenreSystemPerformance();
+
+    // Get overall genre performance across all students
+    const overallPerformance = await getOverallGenrePerformance(daysBackNum);
+
+    res.status(200).json({
+      timestamp: new Date().toISOString(),
+      period: `${daysBackNum} days`,
+      systemPerformance,
+      overallPerformance,
+      summary: {
+        totalStudents: systemPerformance.systemMetrics.totalStudents,
+        totalPlans: overallPerformance.summary.totalPlans,
+        averageCompletionRate: overallPerformance.summary.averagePlanCompletionRate,
+        topPerformingGenre: overallPerformance.topGenres[0]?.genre || 'N/A',
+        topPerformingStudent: overallPerformance.topStudents[0]?.studentName || 'N/A'
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching admin genre analytics:', error);
+    res.status(500).json({ 
+      message: 'Error fetching admin analytics',
+      error: error.message 
+    });
+  }
+});
+
+// GET /api/plans/admin/student/:studentId/genre-analytics
+router.get('/admin/student/:studentId/genre-analytics', authenticate, async (req, res) => {
+  const { studentId } = req.params;
+  const { daysBack = 30 } = req.query;
+  const daysBackNum = parseInt(daysBack);
+
+  try {
+    // Verify the student exists
+    const student = await prisma.student.findUnique({
+      where: { id: parseInt(studentId) },
+      select: { id: true, name: true, gradeLevel: true }
+    });
+
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+
+    const { 
+      getGenreCompletionRates, 
+      getGenreEngagementMetrics,
+      getGenreVarietyStats 
+    } = await import('../lib/genreAnalytics.js');
+
+    // Get various analytics for the student
+    const completionRates = await getGenreCompletionRates(parseInt(studentId), daysBackNum);
+    const engagementMetrics = await getGenreEngagementMetrics(parseInt(studentId), daysBackNum);
+    const varietyStats = await getGenreVarietyStats(parseInt(studentId));
+
+    res.status(200).json({
+      timestamp: new Date().toISOString(),
+      student: {
+        id: student.id,
+        name: student.name,
+        gradeLevel: student.gradeLevel
+      },
+      period: `${daysBackNum} days`,
+      completionRates,
+      engagementMetrics,
+      varietyStats,
+      summary: {
+        totalPlans: completionRates.summary.totalPlans,
+        averageCompletionRate: completionRates.summary.averagePlanCompletionRate,
+        varietyScore: varietyStats.varietyScore,
+        mostEngagedGenre: Object.keys(engagementMetrics.genreEngagement).length > 0 
+          ? Object.entries(engagementMetrics.genreEngagement)
+              .sort(([,a], [,b]) => b.completionRate - a.completionRate)[0][0]
+          : 'N/A'
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching student genre analytics:', error);
+    res.status(500).json({ 
+      message: 'Error fetching student analytics',
+      error: error.message 
+    });
+  }
+});
+
+// GET /api/plans/admin/genre-performance
+router.get('/admin/genre-performance', authenticate, async (req, res) => {
+  const { daysBack = 30, limit = 10 } = req.query;
+  const daysBackNum = parseInt(daysBack);
+  const limitNum = parseInt(limit);
+
+  try {
+    const { getOverallGenrePerformance } = await import('../lib/genreAnalytics.js');
+    
+    const performance = await getOverallGenrePerformance(daysBackNum);
+
+    // Get top and bottom performing genres
+    const sortedGenres = Object.entries(performance.genrePerformance)
+      .sort(([,a], [,b]) => b.planCompletionRate - a.planCompletionRate);
+
+    const topGenres = sortedGenres.slice(0, limitNum);
+    const bottomGenres = sortedGenres.slice(-limitNum).reverse();
+
+    res.status(200).json({
+      timestamp: new Date().toISOString(),
+      period: `${daysBackNum} days`,
+      topGenres: topGenres.map(([genre, stats]) => ({
+        genre,
+        planCompletionRate: stats.planCompletionRate,
+        activityCompletionRate: stats.activityCompletionRate,
+        totalPlans: stats.totalPlans,
+        uniqueStudents: stats.uniqueStudents,
+        gradeLevels: stats.gradeLevels
+      })),
+      bottomGenres: bottomGenres.map(([genre, stats]) => ({
+        genre,
+        planCompletionRate: stats.planCompletionRate,
+        activityCompletionRate: stats.activityCompletionRate,
+        totalPlans: stats.totalPlans,
+        uniqueStudents: stats.uniqueStudents,
+        gradeLevels: stats.gradeLevels
+      })),
+      summary: {
+        totalGenres: Object.keys(performance.genrePerformance).length,
+        averageCompletionRate: performance.summary.averagePlanCompletionRate,
+        bestPerformingGenre: topGenres[0]?.[0] || 'N/A',
+        worstPerformingGenre: bottomGenres[0]?.[0] || 'N/A'
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching genre performance:', error);
+    res.status(500).json({ 
+      message: 'Error fetching genre performance',
+      error: error.message 
+    });
+  }
+});
+
 export default router; 
