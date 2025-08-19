@@ -150,7 +150,7 @@ function constructPrompt(student, selectedInterest, adjustedGradeLevel) {
  * @param {string} interest - The selected interest theme for the story.
  * @returns {Promise<object>} - A promise that resolves to an object containing the 3 chapters.
  */
-export async function generateStory(student, interest) {
+export async function generateStory(student, interest, genreCombination = null) {
   try {
     // Get the most recent assessment to determine reading level
     const mostRecentAssessment = await getMostRecentAssessment(student.id);
@@ -172,7 +172,7 @@ export async function generateStory(student, interest) {
         .join(', ') : '';
     
     const storyPrompt = `
-You are an expert children's storyteller creating a 3-chapter story for a ${studentAge}-year-old student interested in ${interest}.
+You are an expert children's storyteller creating a 3-chapter story for a ${studentAge}-year-old student interested in ${interest}${genreCombination ? ` in a ${genreCombination} style` : ''}.
 
 🚨 CRITICAL REQUIREMENTS - READ CAREFULLY 🚨
 
@@ -193,6 +193,18 @@ You are an expert children's storyteller creating a 3-chapter story for a ${stud
 - If the theme is "cats", create a story about cats and their adventures
 - NO unrelated topics or tangential plot elements
 - ${interest} must be the central focus of every chapter
+
+${genreCombination ? `🎭 GENRE STYLE REQUIREMENTS:
+- Write the story in a ${genreCombination} style
+- The first word (${genreCombination.split(' ')[0]}) indicates the setting/style/time period
+- The second word (${genreCombination.split(' ')[1]}) indicates the genre/theme/tone
+- Blend both elements naturally throughout the story
+- Examples:
+  * "Modern Adventure" = Contemporary setting with exciting, action-packed plot
+  * "Whimsical Mystery" = Playful, magical tone with puzzle-solving elements
+  * "Dark Fantasy" = Mysterious, slightly spooky atmosphere with magical elements
+  * "Epic Quest" = Grand, heroic journey with significant challenges
+- Maintain age-appropriateness while incorporating the genre style` : ''}
 
 📖 STORY STRUCTURE:
 - Chapter 1: Introduce protagonist and ${interest}-related conflict (300-500 words)
@@ -274,6 +286,7 @@ JSON STRUCTURE (copy exactly):
         studentId: student.id,
         studentName: student.name,
         interest: interest,
+        genreCombination: genreCombination,
         adjustedGradeLevel,
         studentAge: new Date().getFullYear() - student.birthday.getFullYear()
       }
@@ -333,6 +346,22 @@ JSON STRUCTURE (copy exactly):
       if (!contentLower.includes(interestLower) && !titleLower.includes(interestLower)) {
         themeIssues.push(`Chapter ${index + 1} does not mention the theme "${interest}"`);
         needsRegeneration = true;
+      }
+
+      // Check genre adherence if genre combination is provided
+      if (genreCombination) {
+        const genreWords = genreCombination.toLowerCase().split(' ');
+        const genreWord1 = genreWords[0];
+        const genreWord2 = genreWords[1];
+        
+        // Check if genre elements are present in the content
+        const hasGenreElement1 = contentLower.includes(genreWord1) || titleLower.includes(genreWord1);
+        const hasGenreElement2 = contentLower.includes(genreWord2) || titleLower.includes(genreWord2);
+        
+        if (!hasGenreElement1 && !hasGenreElement2) {
+          themeIssues.push(`Chapter ${index + 1} does not incorporate the genre style "${genreCombination}"`);
+          needsRegeneration = true;
+        }
       }
       
       // Check for proper dialogue formatting
@@ -394,6 +423,7 @@ JSON STRUCTURE (copy exactly):
           studentId: student.id,
           studentName: student.name,
           interest: interest,
+          genreCombination: genreCombination,
           adjustedGradeLevel,
           isRegeneration: true,
           qualityIssues,
@@ -426,6 +456,7 @@ JSON STRUCTURE (copy exactly):
         }
         console.log(`Successfully regenerated 3-chapter story for student: ${student.name}`);
         console.log(`- Interest Theme: ${interest}`);
+        console.log(`- Genre Style: ${genreCombination || 'Standard'}`);
         console.log(`- Adjusted Grade Level: ${adjustedGradeLevel}`);
         console.log(`- Chapters Generated: ${regeneratedStoryData.chapters.length}`);
         return regeneratedStoryData;
@@ -434,6 +465,7 @@ JSON STRUCTURE (copy exactly):
     
     console.log(`Successfully generated 3-chapter story for student: ${student.name}`);
     console.log(`- Interest Theme: ${interest}`);
+    console.log(`- Genre Style: ${genreCombination || 'Standard'}`);
     console.log(`- Adjusted Grade Level: ${adjustedGradeLevel}`);
     console.log(`- Chapters Generated: ${storyData.chapters.length}`);
     
@@ -1004,14 +1036,23 @@ export async function generateStoryOnly(student, modelOverride = null) {
     const selectedInterest = selectRandomInterest(student.interests);
     console.log(`Selected interest theme: ${selectedInterest}`);
     
-    // Generate the 3-chapter story
+    // Calculate student age for genre selection
+    const studentAge = new Date().getFullYear() - student.birthday.getFullYear();
+    
+    // Select a genre combination using the genre selector
+    const { selectRandomGenreCombination } = await import('./genreSelector.js');
+    const genreCombination = await selectRandomGenreCombination(student.id, studentAge);
+    console.log(`Selected genre combination: ${genreCombination.combination}`);
+    
+    // Generate the 3-chapter story with genre combination
     console.log('Generating 3-chapter story...');
-    const storyData = await generateStory(student, selectedInterest);
+    const storyData = await generateStory(student, selectedInterest, genreCombination.combination);
     
     // Create plan structure with just the story (no activities)
     const weeklyPlan = {
       studentId: student.id,
       interestTheme: selectedInterest,
+      genreCombination: genreCombination.combination,
       chapters: storyData.chapters,
       dailyActivities: []
     };

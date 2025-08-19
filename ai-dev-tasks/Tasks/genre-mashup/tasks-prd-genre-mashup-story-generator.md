@@ -38,15 +38,15 @@
 - [x] 2.6 Create comprehensive unit tests for genreSelector.js
 - [x] 2.7 Add integration tests for genre selection with database
 
-### 3.0 Integrate genre mash-up with existing story generation
+### 3.0 Integrate genre mash-up with existing story generation ✅
 
-- [ ] 3.1 Modify generateStory() function to accept genre combination parameter
-- [ ] 3.2 Update story generation prompts to include genre instructions
-- [ ] 3.3 Integrate genre selection into weekly plan generation workflow
-- [ ] 3.4 Update story generation to pass genre context to OpenAI
-- [ ] 3.5 Add genre combination to story metadata and logging
-- [ ] 3.6 Test story generation with various genre combinations
-- [ ] 3.7 Verify story quality and age-appropriateness with genre integration
+- [x] 3.1 Modify generateStory() function to accept genre combination parameter
+- [x] 3.2 Update story generation prompts to include genre instructions
+- [x] 3.3 Integrate genre selection into weekly plan generation workflow
+- [x] 3.4 Update story generation to pass genre context to OpenAI
+- [x] 3.5 Add genre combination to story metadata and logging
+- [x] 3.6 Test story generation with various genre combinations
+- [x] 3.7 Verify story quality and age-appropriateness with genre integration
 
 ### 4.0 Implement genre tracking and history management
 

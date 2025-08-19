@@ -555,6 +555,7 @@ router.post('/generate', authenticate, modelOverrideMiddleware(), async (req, re
       data: {
         studentId,
         interestTheme: weeklyPlanData.interestTheme,
+        genreCombination: weeklyPlanData.genreCombination,
       }
     });
 
@@ -572,6 +573,13 @@ router.post('/generate', authenticate, modelOverrideMiddleware(), async (req, re
         })
       )
     );
+
+    // Record the genre combination in student's history
+    if (weeklyPlanData.genreCombination) {
+      const { recordGenreCombination } = await import('../lib/genreSelector.js');
+      await recordGenreCombination(studentId, weeklyPlanData.genreCombination);
+      console.log(`Recorded genre combination "${weeklyPlanData.genreCombination}" for student ${studentId}`);
+    }
 
     // Fetch the complete plan with chapters only (no activities yet)
     const completePlan = await prisma.weeklyPlan.findUnique({
