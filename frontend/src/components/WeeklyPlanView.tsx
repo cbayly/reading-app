@@ -85,9 +85,18 @@ export default function WeeklyPlanView({
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Weekly Reading Plan</h1>
-            <p className="text-gray-600 mt-1">
-              {plan.student?.name ? `${plan.student.name.split(' ')[0]}'s ${plan.interestTheme} Adventure` : `Theme: ${plan.interestTheme}`}
-            </p>
+            <div className="text-gray-600 mt-1 space-y-1">
+              {plan.student?.name ? (
+                <p>{`${plan.student.name.split(' ')[0]}'s ${plan.interestTheme} Adventure`}</p>
+              ) : (
+                <>
+                  <p>Theme: {plan.interestTheme}</p>
+                  {plan.genreCombination && (
+                    <p>Genre: {plan.genreCombination}</p>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </div>
 

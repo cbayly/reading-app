@@ -16,27 +16,29 @@ export const CONTENT_TYPES = {
 // Model constants
 export const MODELS = {
   GPT_4O: 'gpt-4o',
-  GPT_4_TURBO: 'gpt-4-turbo'
+  GPT_4_TURBO: 'gpt-4-turbo',
+  GPT_5: 'gpt-5',
+  GPT_5_MINI: 'gpt-5-mini'
 };
 
 // Default model configuration per content type
 const DEFAULT_MODEL_CONFIG = {
   [CONTENT_TYPES.STORY_CREATION]: {
-    model: MODELS.GPT_4O,
-    reasoning: 'GPT-4o excels at creative and coherent narrative generation, providing engaging, high-quality stories with excellent contextual understanding.',
-    temperature: 0.7,
+    model: MODELS.GPT_5,
+    reasoning: 'GPT-5 provides the most advanced creative and coherent narrative generation, offering the highest quality stories with superior contextual understanding and creativity.',
+    temperature: 1.0,
     maxTokens: 4000
   },
   [CONTENT_TYPES.ASSESSMENT_CREATION]: {
-    model: MODELS.GPT_4_TURBO,
-    reasoning: 'GPT-4-turbo provides precise control, consistent output, and faster responses, ideal for structured content generation like assessments.',
-    temperature: 0.7,
+    model: MODELS.GPT_5_MINI,
+    reasoning: 'GPT-5-mini provides excellent precision and consistency for structured content generation like assessments, with faster response times and cost efficiency.',
+    temperature: 1.0,
     maxTokens: 3000
   },
   [CONTENT_TYPES.DAILY_TASK_GENERATION]: {
-    model: MODELS.GPT_4_TURBO,
-    reasoning: 'GPT-4-turbo efficiently handles structured and repetitive content generation tasks with speed and consistency.',
-    temperature: 0.7,
+    model: MODELS.GPT_5_MINI,
+    reasoning: 'GPT-5-mini efficiently handles structured and repetitive content generation tasks with speed, consistency, and cost-effectiveness.',
+    temperature: 1.0,
     maxTokens: 2000
   }
 };

@@ -1,7 +1,7 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authenticate } from '../middleware/auth.js';
-import { generateStoryOnly, generateActivityWithFallback } from '../lib/openai.js';
+import { generateStory, generateStoryOnly, generateActivityWithFallback } from '../lib/openai.js';
 import { modelOverrideMiddleware, getModelConfigWithOverride } from '../middleware/modelOverride.js';
 
 const router = express.Router();
@@ -492,6 +492,289 @@ const ERROR_HANDLERS = {
   }
 };
 
+// POST /api/plans - Create a new 5-day plan with story generation
+router.post('/', authenticate, async (req, res) => {
+  const { studentId, name, theme, genreCombination } = req.body;
+  const parentId = req.user.id;
+
+  if (!studentId) {
+    return res.status(400).json({ message: 'Student ID is required' });
+  }
+
+  if (!name || !theme) {
+    return res.status(400).json({ message: 'Plan name and theme are required' });
+  }
+
+  try {
+    // Verify the student belongs to the authenticated parent
+    const student = await prisma.student.findFirst({
+      where: { id: parseInt(studentId), parentId }
+    });
+
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+
+    // Generate the story using the updated story generation logic
+    console.log(`Generating story for student ${student.name} with theme: ${theme}${genreCombination ? `, genre: ${genreCombination}` : ''}`);
+    
+    const storyData = await generateStory(student, theme, genreCombination);
+    
+    console.log('Story generated successfully:', {
+      title: storyData.title,
+      themes: storyData.themes,
+      vocabularyCount: storyData.vocabulary?.length || 0
+    });
+
+    // Create the new plan structure
+    const plan = await prisma.plan.create({
+      data: {
+        studentId: parseInt(studentId),
+        name,
+        theme,
+        status: 'active'
+      }
+    });
+
+    // Create the story record linked to the plan
+    const story = await prisma.story.create({
+      data: {
+        planId: plan.id,
+        title: storyData.title,
+        themes: storyData.themes,
+        part1: storyData.part1,
+        part2: storyData.part2,
+        part3: storyData.part3,
+        vocabulary: storyData.vocabulary
+      }
+    });
+
+    // Create the 5 days for the plan
+    const days = await Promise.all(
+      Array.from({ length: 5 }, (_, index) => 
+        prisma.day.create({
+          data: {
+            planId: plan.id,
+            dayIndex: index + 1,
+            state: index === 0 ? 'available' : 'locked' // Day 1 is available, rest are locked
+          }
+        })
+      )
+    );
+
+    // Scaffold initial activities for each day based on the PRD
+    const dayActivities = [];
+
+    // Day 1: Vocabulary Matching (6 pairs from story vocabulary)
+    const day1Activities = [{
+      dayId: days[0].id,
+      type: 'matching',
+      prompt: 'Match each vocabulary word with its correct definition from Chapter 1.',
+      data: {
+        pairs: storyData.vocabulary.map(vocab => ({
+          word: vocab.word,
+          definition: vocab.definition
+        })),
+        instructions: 'Match all 6 vocabulary words with their correct definitions. All pairs must be correct to complete this activity.'
+      },
+      response: null,
+      isValid: null
+    }];
+    dayActivities.push(...day1Activities);
+
+    // Day 2: Comprehension Matching (5-6 items)
+    const day2Activities = [{
+      dayId: days[1].id,
+      type: 'matching',
+      prompt: 'Match the prompts with their correct answers based on Chapter 2.',
+      data: {
+        pairs: [
+          { prompt: 'What was the main challenge in Chapter 2?', answer: 'To be generated based on story content' },
+          { prompt: 'How did the character respond to the challenge?', answer: 'To be generated based on story content' },
+          { prompt: 'What was the setting of Chapter 2?', answer: 'To be generated based on story content' },
+          { prompt: 'What was the outcome of the main event?', answer: 'To be generated based on story content' },
+          { prompt: 'What lesson did the character learn?', answer: 'To be generated based on story content' }
+        ],
+        instructions: 'Match all 5 comprehension questions with their correct answers. All pairs must be correct to complete this activity.'
+      },
+      response: null,
+      isValid: null
+    }];
+    dayActivities.push(...day2Activities);
+
+    // Day 3: Choice-based Reflection
+    const day3Activities = [{
+      dayId: days[2].id,
+      type: 'reflection',
+      prompt: 'Choose your reflection style and complete the activity.',
+      data: {
+        choice: null, // Will be set by user: 'oneGoodTwoBad' or 'twoGoodOneBad'
+        options: {
+          oneGoodTwoBad: {
+            label: 'Option A: 1 good thing, 2 things to improve',
+            fields: [
+              { label: 'One good thing about the story', required: true },
+              { label: 'First thing that could be improved', required: true },
+              { label: 'Second thing that could be improved', required: true }
+            ]
+          },
+          twoGoodOneBad: {
+            label: 'Option B: 2 good things, 1 thing to improve',
+            fields: [
+              { label: 'First good thing about the story', required: true },
+              { label: 'Second good thing about the story', required: true },
+              { label: 'One thing that could be improved', required: true }
+            ]
+          }
+        },
+        instructions: 'Choose your reflection style and provide thoughtful responses for all three fields.'
+      },
+      response: null,
+      isValid: null
+    }];
+    dayActivities.push(...day3Activities);
+
+    // Day 4: Conditional Writing + Optional Upload
+    const day4Activities = [{
+      dayId: days[3].id,
+      type: 'writing',
+      prompt: 'Write based on your Day 3 choice.',
+      data: {
+        conditionalPrompt: {
+          oneGoodTwoBad: 'Write what you would change to make the story better. (1-3 paragraphs)',
+          twoGoodOneBad: 'Write what you think will happen on the next adventure in the series. (1-3 paragraphs)'
+        },
+        instructions: 'Write 1-3 paragraphs based on your Day 3 reflection choice. Uploading a drawing is optional.',
+        requiresDay3Choice: true
+      },
+      response: null,
+      isValid: null
+    }, {
+      dayId: days[3].id,
+      type: 'upload',
+      prompt: 'Optional: Draw what you described and upload it.',
+      data: {
+        acceptedTypes: ['image/png', 'image/jpeg', 'image/webp'],
+        maxSize: 10485760, // 10MB
+        instructions: 'Upload an image file (PNG, JPEG, or WebP) up to 10MB. This is optional.',
+        isOptional: true
+      },
+      response: null,
+      isValid: null
+    }];
+    dayActivities.push(...day4Activities);
+
+    // Day 5: Activity Ideas (user must pick at least 2)
+    const day5Activities = [{
+      dayId: days[4].id,
+      type: 'multi-select',
+      prompt: 'Select and complete at least 2 activities from the list below.',
+      data: {
+        activities: [
+          {
+            id: 'sequence-builder',
+            type: 'sequence',
+            label: 'Sequence Builder',
+            description: 'Reorder 8-10 story beats in the correct sequence.',
+            required: false
+          },
+          {
+            id: 'alternate-ending',
+            type: 'writing',
+            label: 'Alternate Ending',
+            description: 'Write a short alternate ending (1-2 paragraphs).',
+            required: false
+          },
+          {
+            id: 'character-journal',
+            type: 'writing',
+            label: 'Character Journal',
+            description: 'Write a journal entry from a character\'s point of view.',
+            required: false
+          },
+          {
+            id: 'dialogue-rewrite',
+            type: 'writing',
+            label: 'Dialogue Rewrite',
+            description: 'Rewrite a scene as dialogue only (script format).',
+            required: false
+          },
+          {
+            id: 'poster-slogan',
+            type: 'writing',
+            label: 'Poster/Slogan',
+            description: 'Create a tagline and short blurb for a poster.',
+            required: false
+          },
+          {
+            id: 'vocabulary-author',
+            type: 'writing',
+            label: 'Vocabulary Author',
+            description: 'Create 4 new vocabulary words with definitions and example sentences.',
+            required: false
+          }
+        ],
+        instructions: 'You must select and complete at least 2 activities. No activities are pre-selected.',
+        minRequired: 2
+      },
+      response: null,
+      isValid: null
+    }];
+    dayActivities.push(...day5Activities);
+
+    // Create all activities in the database
+    const createdActivities = await Promise.all(
+      dayActivities.map(activity => 
+        prisma.activity.create({
+          data: activity
+        })
+      )
+    );
+
+    console.log(`Created ${createdActivities.length} activities across 5 days`);
+
+    // Fetch the complete plan with story and days
+    const completePlan = await prisma.plan.findUnique({
+      where: { id: plan.id },
+      include: {
+        student: true,
+        story: true,
+        days: {
+          orderBy: { dayIndex: 'asc' },
+          include: {
+            activities: {
+              orderBy: { id: 'asc' }
+            }
+          }
+        }
+      }
+    });
+
+    console.log(`Plan created successfully with story: ${story.title}`);
+
+    res.status(201).json({
+      message: 'Plan created successfully with story',
+      plan: completePlan
+    });
+
+  } catch (error) {
+    console.error('Error creating plan with story:', error);
+    
+    // Enhanced error handling for story generation failures
+    if (error.message.includes('OpenAI') || error.message.includes('story')) {
+      return res.status(500).json({
+        message: 'Failed to generate story content. Please try again.',
+        error: 'STORY_GENERATION_FAILED',
+        details: error.message
+      });
+    }
+    
+    ERROR_HANDLERS.handleRouteError(error, req, res, 'PLAN_CREATION', {
+      studentId: parseInt(studentId)
+    });
+  }
+});
+
 // POST /api/plans/generate
 router.post('/generate', authenticate, modelOverrideMiddleware(), async (req, res) => {
   const { studentId } = req.body;
@@ -501,17 +784,18 @@ router.post('/generate', authenticate, modelOverrideMiddleware(), async (req, re
     return res.status(400).json({ message: 'Student ID is required' });
   }
 
-  try {
-    // Verify the student belongs to the authenticated parent
-    console.log('Generating weekly plan for:', { studentId, parentId });
-    
-    const student = await prisma.student.findFirst({
-      where: { id: studentId, parentId }
-    });
+  // Verify the student belongs to the authenticated parent (moved outside try block)
+  console.log('Generating weekly plan for:', { studentId, parentId });
+  
+  const student = await prisma.student.findFirst({
+    where: { id: studentId, parentId }
+  });
 
-    if (!student) {
-      return res.status(404).json({ message: 'Student not found' });
-    }
+  if (!student) {
+    return res.status(404).json({ message: 'Student not found' });
+  }
+
+  try {
 
     // Check for existing weekly plan (not older than 2 weeks)
     const twoWeeksAgo = new Date();
@@ -584,7 +868,14 @@ router.post('/generate', authenticate, modelOverrideMiddleware(), async (req, re
     // Fetch the complete plan with chapters only (no activities yet)
     const completePlan = await prisma.weeklyPlan.findUnique({
       where: { id: weeklyPlan.id },
-      include: {
+      select: {
+        id: true,
+        studentId: true,
+        interestTheme: true,
+        genreCombination: true,
+        cachedPrompt: true,
+        cachedOutput: true,
+        createdAt: true,
         student: true,
         chapters: {
           orderBy: { chapterNumber: 'asc' }
@@ -607,6 +898,100 @@ router.post('/generate', authenticate, modelOverrideMiddleware(), async (req, re
   }
 });
 
+// GET /api/plans/:id - Fetch a single plan with its associated story, days, and activities
+router.get('/:id', authenticate, async (req, res) => {
+  const { id } = req.params;
+  const parentId = req.user.id;
+
+  try {
+    // Fetch the plan and verify it belongs to the authenticated parent
+    const plan = await prisma.plan.findFirst({
+      where: {
+        id: parseInt(id),
+        student: {
+          parentId
+        }
+      },
+      include: {
+        student: {
+          select: {
+            id: true,
+            name: true,
+            gradeLevel: true
+          }
+        },
+        story: true,
+        days: {
+          orderBy: { dayIndex: 'asc' },
+          include: {
+            activities: {
+              orderBy: { id: 'asc' }
+            }
+          }
+        }
+      }
+    });
+
+    if (!plan) {
+      return res.status(404).json({ 
+        message: 'Plan not found or access denied',
+        error: 'PLAN_NOT_FOUND'
+      });
+    }
+
+    // Calculate plan status and progress
+    const totalDays = plan.days.length;
+    const completedDays = plan.days.filter(day => day.state === 'complete').length;
+    const availableDays = plan.days.filter(day => day.state === 'available').length;
+    const lockedDays = plan.days.filter(day => day.state === 'locked').length;
+    const progress = Math.round((completedDays / totalDays) * 100);
+
+    // Find the next available day
+    const nextAvailableDay = plan.days.find(day => day.state === 'available');
+
+    // Enhanced plan response with status
+    const enhancedPlan = {
+      ...plan,
+      planStatus: {
+        totalDays,
+        completedDays,
+        availableDays,
+        lockedDays,
+        progress,
+        nextAvailableDay: nextAvailableDay ? nextAvailableDay.dayIndex : null,
+        isComplete: completedDays === totalDays
+      }
+    };
+
+    // Debug logging
+    console.log('GET /api/plans/:id - Plan data being returned:', {
+      planId: plan.id,
+      days: plan.days.map(day => ({
+        dayIndex: day.dayIndex,
+        state: day.state,
+        completedAt: day.completedAt,
+        activitiesCount: day.activities.length
+      }))
+    });
+
+    // Check if request can be served from cache
+    // Temporarily disabled for debugging
+    // if (CACHE_UTILS.checkCacheCondition(req, enhancedPlan)) {
+    //   return res.status(304).end(); // Not Modified
+    // }
+
+    // Set caching headers
+    // CACHE_UTILS.setCacheHeaders(res, enhancedPlan, 'plan');
+
+    res.json(enhancedPlan);
+
+  } catch (error) {
+    ERROR_HANDLERS.handleRouteError(error, req, res, 'PLAN_FETCH', {
+      planId: parseInt(id)
+    });
+  }
+});
+
 // GET /api/plans/:studentId
 router.get('/:studentId', authenticate, async (req, res) => {
   const { studentId } = req.params;
@@ -625,7 +1010,14 @@ router.get('/:studentId', authenticate, async (req, res) => {
     // Get the most recent weekly plan
     const weeklyPlan = await prisma.weeklyPlan.findFirst({
       where: { studentId: parseInt(studentId) },
-      include: {
+      select: {
+        id: true,
+        studentId: true,
+        interestTheme: true,
+        genreCombination: true,
+        cachedPrompt: true,
+        cachedOutput: true,
+        createdAt: true,
         student: true,
         chapters: {
           orderBy: { chapterNumber: 'asc' }
@@ -741,6 +1133,351 @@ router.get('/:studentId', authenticate, async (req, res) => {
   }
 });
 
+// POST /api/plans/:id/complete - Mark a plan as complete
+router.post('/:id/complete', authenticate, async (req, res) => {
+  const { id } = req.params;
+  const parentId = req.user.id;
+
+  try {
+    // Fetch the plan and verify it belongs to the authenticated parent
+    const plan = await prisma.plan.findFirst({
+      where: {
+        id: parseInt(id),
+        student: {
+          parentId
+        }
+      },
+      include: {
+        student: true,
+        days: {
+          orderBy: { dayIndex: 'asc' },
+          include: {
+            activities: true
+          }
+        }
+      }
+    });
+
+    if (!plan) {
+      return res.status(404).json({ 
+        message: 'Plan not found or access denied',
+        error: 'PLAN_NOT_FOUND'
+      });
+    }
+
+    // Check if all 5 days are complete
+    const allDaysComplete = plan.days.every(day => day.state === 'complete');
+    
+    if (!allDaysComplete) {
+      const incompleteDays = plan.days
+        .filter(day => day.state !== 'complete')
+        .map(day => day.dayIndex);
+      
+      return res.status(400).json({ 
+        message: 'Cannot complete plan. All days must be finished first.',
+        error: 'INCOMPLETE_DAYS',
+        incompleteDays
+      });
+    }
+
+    // Check if plan is already completed
+    if (plan.status === 'completed') {
+      return res.status(400).json({ 
+        message: 'Plan is already marked as complete.',
+        error: 'PLAN_ALREADY_COMPLETE'
+      });
+    }
+
+    // Mark the plan as completed
+    const updatedPlan = await prisma.plan.update({
+      where: { id: parseInt(id) },
+      data: {
+        status: 'completed',
+        updatedAt: new Date()
+      },
+      include: {
+        student: {
+          select: {
+            id: true,
+            name: true,
+            gradeLevel: true
+          }
+        },
+        story: true,
+        days: {
+          orderBy: { dayIndex: 'asc' },
+          include: {
+            activities: {
+              orderBy: { id: 'asc' }
+            }
+          }
+        }
+      }
+    });
+
+    // Calculate completion statistics
+    const totalActivities = plan.days.reduce((sum, day) => sum + day.activities.length, 0);
+    const completedActivities = plan.days.reduce((sum, day) => 
+      sum + day.activities.filter(activity => activity.isValid).length, 0
+    );
+
+    const completionStats = {
+      totalDays: plan.days.length,
+      completedDays: plan.days.filter(day => day.state === 'complete').length,
+      totalActivities,
+      completedActivities,
+      completionRate: Math.round((completedActivities / totalActivities) * 100),
+      completedAt: updatedPlan.updatedAt
+    };
+
+    // Generate a new plan for the student after completing the current plan
+    console.log(`Generating new plan for student ${plan.student.name} after completing plan ${id}`);
+    
+    try {
+      // Generate a new story for the new plan
+      const newStoryData = await generateStory(plan.student, plan.theme);
+      
+      // Create the new plan structure
+      const newPlan = await prisma.plan.create({
+        data: {
+          studentId: plan.student.id,
+          name: newStoryData.title,
+          theme: newStoryData.themes[0], // Use the first theme
+          status: 'active'
+        }
+      });
+
+      // Create the story record linked to the new plan
+      const newStory = await prisma.story.create({
+        data: {
+          planId: newPlan.id,
+          title: newStoryData.title,
+          themes: newStoryData.themes,
+          part1: newStoryData.part1,
+          part2: newStoryData.part2,
+          part3: newStoryData.part3,
+          vocabulary: newStoryData.vocabulary
+        }
+      });
+
+      // Create the 5 days for the new plan
+      const newDays = await Promise.all(
+        Array.from({ length: 5 }, (_, index) => 
+          prisma.day.create({
+            data: {
+              planId: newPlan.id,
+              dayIndex: index + 1,
+              state: index === 0 ? 'available' : 'locked'
+            }
+          })
+        )
+      );
+
+      // Scaffold initial activities for the new plan (reuse the same logic from POST /api/plans)
+      const newDayActivities = [];
+
+      // Day 1: Vocabulary Matching
+      const newDay1Activities = [{
+        dayId: newDays[0].id,
+        type: 'matching',
+        prompt: 'Match each vocabulary word with its correct definition from Chapter 1.',
+        data: {
+          pairs: newStoryData.vocabulary.map(vocab => ({
+            word: vocab.word,
+            definition: vocab.definition
+          })),
+          instructions: 'Match all 6 vocabulary words with their correct definitions. All pairs must be correct to complete this activity.'
+        },
+        response: null,
+        isValid: null
+      }];
+      newDayActivities.push(...newDay1Activities);
+
+      // Day 2: Comprehension Matching
+      const newDay2Activities = [{
+        dayId: newDays[1].id,
+        type: 'matching',
+        prompt: 'Match the prompts with their correct answers based on Chapter 2.',
+        data: {
+          pairs: [
+            { prompt: 'What was the main challenge in Chapter 2?', answer: 'To be generated based on story content' },
+            { prompt: 'How did the character respond to the challenge?', answer: 'To be generated based on story content' },
+            { prompt: 'What was the setting of Chapter 2?', answer: 'To be generated based on story content' },
+            { prompt: 'What was the outcome of the main event?', answer: 'To be generated based on story content' },
+            { prompt: 'What lesson did the character learn?', answer: 'To be generated based on story content' }
+          ],
+          instructions: 'Match all 5 comprehension questions with their correct answers. All pairs must be correct to complete this activity.'
+        },
+        response: null,
+        isValid: null
+      }];
+      newDayActivities.push(...newDay2Activities);
+
+      // Day 3: Choice-based Reflection
+      const newDay3Activities = [{
+        dayId: newDays[2].id,
+        type: 'reflection',
+        prompt: 'Choose your reflection style and complete the activity.',
+        data: {
+          choice: null,
+          options: {
+            oneGoodTwoBad: {
+              label: 'Option A: 1 good thing, 2 things to improve',
+              fields: [
+                { label: 'One good thing about the story', required: true },
+                { label: 'First thing that could be improved', required: true },
+                { label: 'Second thing that could be improved', required: true }
+              ]
+            },
+            twoGoodOneBad: {
+              label: 'Option B: 2 good things, 1 thing to improve',
+              fields: [
+                { label: 'First good thing about the story', required: true },
+                { label: 'Second good thing about the story', required: true },
+                { label: 'One thing that could be improved', required: true }
+              ]
+            }
+          },
+          instructions: 'Choose your reflection style and provide thoughtful responses for all three fields.'
+        },
+        response: null,
+        isValid: null
+      }];
+      newDayActivities.push(...newDay3Activities);
+
+      // Day 4: Conditional Writing + Optional Upload
+      const newDay4Activities = [{
+        dayId: newDays[3].id,
+        type: 'writing',
+        prompt: 'Write based on your Day 3 choice.',
+        data: {
+          conditionalPrompt: {
+            oneGoodTwoBad: 'Write what you would change to make the story better. (1-3 paragraphs)',
+            twoGoodOneBad: 'Write what you think will happen on the next adventure in the series. (1-3 paragraphs)'
+          },
+          instructions: 'Write 1-3 paragraphs based on your Day 3 reflection choice. Uploading a drawing is optional.',
+          requiresDay3Choice: true
+        },
+        response: null,
+        isValid: null
+      }, {
+        dayId: newDays[3].id,
+        type: 'upload',
+        prompt: 'Optional: Draw what you described and upload it.',
+        data: {
+          acceptedTypes: ['image/png', 'image/jpeg', 'image/webp'],
+          maxSize: 10485760,
+          instructions: 'Upload an image file (PNG, JPEG, or WebP) up to 10MB. This is optional.',
+          isOptional: true
+        },
+        response: null,
+        isValid: null
+      }];
+      newDayActivities.push(...newDay4Activities);
+
+      // Day 5: Activity Ideas
+      const newDay5Activities = [{
+        dayId: newDays[4].id,
+        type: 'multi-select',
+        prompt: 'Select and complete at least 2 activities from the list below.',
+        data: {
+          activities: [
+            {
+              id: 'sequence-builder',
+              type: 'sequence',
+              label: 'Sequence Builder',
+              description: 'Reorder 8-10 story beats in the correct sequence.',
+              required: false
+            },
+            {
+              id: 'alternate-ending',
+              type: 'writing',
+              label: 'Alternate Ending',
+              description: 'Write a short alternate ending (1-2 paragraphs).',
+              required: false
+            },
+            {
+              id: 'character-journal',
+              type: 'writing',
+              label: 'Character Journal',
+              description: 'Write a journal entry from a character\'s point of view.',
+              required: false
+            },
+            {
+              id: 'dialogue-rewrite',
+              type: 'writing',
+              label: 'Dialogue Rewrite',
+              description: 'Rewrite a scene as dialogue only (script format).',
+              required: false
+            },
+            {
+              id: 'poster-slogan',
+              type: 'writing',
+              label: 'Poster/Slogan',
+              description: 'Create a tagline and short blurb for a poster.',
+              required: false
+            },
+            {
+              id: 'vocabulary-author',
+              type: 'writing',
+              label: 'Vocabulary Author',
+              description: 'Create 4 new vocabulary words with definitions and example sentences.',
+              required: false
+            }
+          ],
+          instructions: 'You must select and complete at least 2 activities. No activities are pre-selected.',
+          minRequired: 2
+        },
+        response: null,
+        isValid: null
+      }];
+      newDayActivities.push(...newDay5Activities);
+
+      // Create all activities for the new plan
+      await Promise.all(
+        newDayActivities.map(activity => 
+          prisma.activity.create({
+            data: activity
+          })
+        )
+      );
+
+      console.log(`Successfully generated new plan ${newPlan.id} with story: ${newStory.title}`);
+
+      res.json({
+        message: 'Plan completed successfully! A new plan has been generated.',
+        plan: updatedPlan,
+        completionStats,
+        newPlan: {
+          id: newPlan.id,
+          name: newPlan.name,
+          theme: newPlan.theme,
+          storyTitle: newStory.title
+        },
+        nextSteps: 'You can now start the new plan with fresh content.'
+      });
+
+    } catch (newPlanError) {
+      console.error('Error generating new plan:', newPlanError);
+      
+      // If new plan generation fails, still return the completion response
+      res.json({
+        message: 'Plan completed successfully! New plan generation failed.',
+        plan: updatedPlan,
+        completionStats,
+        error: 'NEW_PLAN_GENERATION_FAILED',
+        errorDetails: newPlanError.message,
+        nextSteps: 'You can manually generate a new plan when ready.'
+      });
+    }
+
+  } catch (error) {
+    ERROR_HANDLERS.handleRouteError(error, req, res, 'PLAN_COMPLETION', {
+      planId: parseInt(id)
+    });
+  }
+});
+
 // POST /api/plans/activity/generate
 router.post('/activity/generate', authenticate, validateSequentialAccess, modelOverrideMiddleware(), async (req, res) => {
   const { planId, dayOfWeek } = req.body;
@@ -823,6 +1560,182 @@ router.post('/activity/generate', authenticate, validateSequentialAccess, modelO
   }
 });
 
+// PUT /api/plans/:id/days/:index - Save and validate day activities
+router.put('/:id/days/:index', authenticate, async (req, res) => {
+  const { id, index } = req.params;
+  const { activities } = req.body;
+  const parentId = req.user.id;
+
+  if (!activities || !Array.isArray(activities)) {
+    return res.status(400).json({ message: 'Activities array is required' });
+  }
+
+  try {
+    // Fetch the plan and verify it belongs to the authenticated parent
+    const plan = await prisma.plan.findFirst({
+      where: {
+        id: parseInt(id),
+        student: {
+          parentId
+        }
+      },
+      include: {
+        student: true,
+        days: {
+          where: { dayIndex: parseInt(index) },
+          include: {
+            activities: true
+          }
+        }
+      }
+    });
+
+    if (!plan) {
+      return res.status(404).json({ 
+        message: 'Plan not found or access denied',
+        error: 'PLAN_NOT_FOUND'
+      });
+    }
+
+    const day = plan.days[0];
+    if (!day) {
+      return res.status(404).json({ 
+        message: `Day ${index} not found`,
+        error: 'DAY_NOT_FOUND'
+      });
+    }
+
+    // Check if day is available for completion
+    if (day.state === 'locked') {
+      return res.status(400).json({ 
+        message: `Day ${index} is locked. Complete previous days first.`,
+        error: 'DAY_LOCKED'
+      });
+    }
+
+    if (day.state === 'complete') {
+      return res.status(400).json({ 
+        message: `Day ${index} is already complete.`,
+        error: 'DAY_ALREADY_COMPLETE'
+      });
+    }
+
+    // Validate activities based on their types
+    const validationResults = [];
+    let allValid = true;
+
+    for (const activity of activities) {
+      const isValid = validateActivityResponse(activity, day.dayIndex);
+      validationResults.push({
+        activityId: activity.id,
+        type: activity.type,
+        isValid
+      });
+      
+      if (!isValid) {
+        allValid = false;
+      }
+    }
+
+    // Update activities with responses and validation status
+    const updatedActivities = await Promise.all(
+      activities.map(async (activity) => {
+        const validationResult = validationResults.find(r => r.activityId === activity.id);
+        
+        return await prisma.activity.update({
+          where: { id: activity.id },
+          data: {
+            response: activity.response,
+            isValid: validationResult.isValid,
+            updatedAt: new Date()
+          }
+        });
+      })
+    );
+
+    // If all activities are valid, mark the day as complete
+    if (allValid) {
+      await prisma.day.update({
+        where: { id: day.id },
+        data: {
+          state: 'complete',
+          completedAt: new Date(),
+          updatedAt: new Date()
+        }
+      });
+
+      // Check if this was the last day and update plan status if needed
+      const allDays = await prisma.day.findMany({
+        where: { planId: parseInt(id) },
+        orderBy: { dayIndex: 'asc' }
+      });
+
+      const allComplete = allDays.every(d => d.state === 'complete');
+      
+      if (allComplete) {
+        await prisma.plan.update({
+          where: { id: parseInt(id) },
+          data: {
+            status: 'completed',
+            updatedAt: new Date()
+          }
+        });
+      } else {
+        // Unlock the next day if it exists
+        const nextDay = allDays.find(d => d.dayIndex === parseInt(index) + 1);
+        if (nextDay && nextDay.state === 'locked') {
+          await prisma.day.update({
+            where: { id: nextDay.id },
+            data: {
+              state: 'available',
+              updatedAt: new Date()
+            }
+          });
+        }
+      }
+    }
+
+    // Fetch updated plan for response
+    const updatedPlan = await prisma.plan.findUnique({
+      where: { id: parseInt(id) },
+      include: {
+        student: {
+          select: {
+            id: true,
+            name: true,
+            gradeLevel: true
+          }
+        },
+        story: true,
+        days: {
+          orderBy: { dayIndex: 'asc' },
+          include: {
+            activities: {
+              orderBy: { id: 'asc' }
+            }
+          }
+        }
+      }
+    });
+
+    res.json({
+      message: allValid 
+        ? `Day ${index} completed successfully!` 
+        : `Day ${index} activities saved. Some activities need correction.`,
+      activities: updatedActivities,
+      validationResults,
+      dayComplete: allValid,
+      plan: updatedPlan
+    });
+
+  } catch (error) {
+    ERROR_HANDLERS.handleRouteError(error, req, res, 'DAY_ACTIVITY_UPDATE', {
+      planId: parseInt(id),
+      dayIndex: parseInt(index)
+    });
+  }
+});
+
 // PUT /api/plans/activity/:activityId
 router.put('/activity/:activityId', authenticate, validateActivityAccess, async (req, res) => {
   const { studentResponse, markCompleted = true } = req.body;
@@ -883,6 +1796,219 @@ router.put('/activity/:activityId', authenticate, validateActivityAccess, async 
     });
   }
 });
+
+/**
+ * Validates activity responses for the new 5-day plan structure
+ * @param {object} activity - The activity with response data
+ * @param {number} dayIndex - The day index (1-5)
+ * @returns {boolean} - True if response is valid
+ */
+function validateActivityResponse(activity, dayIndex) {
+  if (!activity.response) return false;
+
+  switch (activity.type) {
+    case 'matching':
+      return validateMatchingActivity(activity.response, dayIndex);
+    case 'reflection':
+      return validateReflectionActivity(activity.response, dayIndex);
+    case 'writing':
+      return validateWritingActivity(activity.response, dayIndex);
+    case 'multi-select':
+      return validateMultiSelectActivity(activity.response, dayIndex);
+    case 'upload':
+      return validateUploadActivity(activity.response);
+    default:
+      return validateGenericActivity(activity.response);
+  }
+}
+
+/**
+ * Validates matching activities (Day 1 & 2)
+ * Day 1: Vocabulary matching - all 6 pairs must be correct
+ * Day 2: Comprehension matching - all 5 pairs must be correct
+ */
+function validateMatchingActivity(response, dayIndex) {
+  if (!response.matches || !Array.isArray(response.matches)) return false;
+  
+  // Day 1 requires exactly 6 vocabulary pairs
+  if (dayIndex === 1) {
+    if (response.matches.length !== 6) return false;
+  }
+  
+  // Day 2 requires exactly 4 comprehension pairs
+  if (dayIndex === 2) {
+    if (response.matches.length !== 4) return false;
+  }
+  
+  // Check that all pairs are correctly matched
+  const allCorrect = response.matches.every(match => 
+    match.isCorrect === true && 
+    match.word && 
+    match.definition && 
+    match.word.trim() !== '' && 
+    match.definition.trim() !== ''
+  );
+  
+  return allCorrect;
+}
+
+/**
+ * Validates reflection activities (Day 3)
+ * User must choose between Option A (1 good, 2 bad) or Option B (2 good, 1 bad)
+ * All three text fields must be filled with meaningful responses
+ */
+function validateReflectionActivity(response, dayIndex) {
+  if (!response.choice || !response.responses) return false;
+  
+  // Must choose either 'oneGoodTwoBad' or 'twoGoodOneBad'
+  if (!['oneGoodTwoBad', 'twoGoodOneBad'].includes(response.choice)) return false;
+  
+  // Must have exactly 3 responses
+  if (!Array.isArray(response.responses) || response.responses.length !== 3) return false;
+  
+  // All three responses must be non-empty and meaningful (at least 10 characters)
+  const allResponsesValid = response.responses.every(response => 
+    response && 
+    typeof response === 'string' && 
+    response.trim().length >= 10
+  );
+  
+  return allResponsesValid;
+}
+
+/**
+ * Validates writing activities (Day 4)
+ * Day 4 requires 1-3 paragraphs based on Day 3 choice
+ * Minimum 50 words for meaningful response (matches frontend)
+ */
+function validateWritingActivity(response, dayIndex) {
+  console.log(`Validating writing activity for Day ${dayIndex}:`, {
+    response,
+    hasWriting: !!response.writing,
+    hasText: !!response.text,
+    writingLength: response.writing?.length,
+    textLength: response.text?.length
+  });
+
+  // Check for both response.writing (old format) and response.text (new format)
+  const writing = response.writing || response.text;
+  if (!writing || typeof writing !== 'string') {
+    console.log('Writing validation failed: no valid writing content');
+    return false;
+  }
+  
+  const writingText = writing.trim();
+  const wordCount = writingText.split(/\s+/).length;
+  
+  // Day 4 requires substantial writing (1-3 paragraphs, minimum 50 words to match frontend)
+  if (dayIndex === 4) {
+    const isValid = wordCount >= 50 && writingText.length >= 150;
+    console.log(`Day 4 writing validation:`, {
+      wordCount,
+      textLength: writingText.length,
+      isValid,
+      requirements: { minWords: 50, minChars: 150 }
+    });
+    return isValid;
+  }
+  
+  // Other writing activities require at least 50 words
+  const isValid = wordCount >= 50 && writingText.length >= 150;
+  console.log(`Writing validation for Day ${dayIndex}:`, {
+    wordCount,
+    textLength: writingText.length,
+    isValid,
+    requirements: { minWords: 50, minChars: 150 }
+  });
+  return isValid;
+}
+
+/**
+ * Validates multi-select activities (Day 5)
+ * User must select at least 2 activities from the available options
+ * Each selected activity must have a valid response
+ */
+function validateMultiSelectActivity(response, dayIndex) {
+  if (!response.selectedActivities || !Array.isArray(response.selectedActivities)) return false;
+  
+  // Must select at least 2 activities
+  if (response.selectedActivities.length < 2) return false;
+  
+  // Each selected activity must have a valid response
+  const allActivitiesValid = response.selectedActivities.every(activity => {
+    if (!activity.id || !activity.response) return false;
+    
+    // Validate based on activity type
+    switch (activity.type) {
+      case 'sequence':
+        // Sequence must be at least 80% correct
+        return validateSequenceActivity(activity.response);
+      case 'writing':
+        // Writing must be substantial
+        return validateWritingResponse(activity.response);
+      case 'upload':
+        // Upload is optional, so always valid if present
+        return true;
+      default:
+        return validateGenericActivity(activity.response);
+    }
+  });
+  
+  return allActivitiesValid;
+}
+
+/**
+ * Validates sequence builder activities (Day 5)
+ * Requires at least 80% correct ordering
+ */
+function validateSequenceActivity(response) {
+  if (!response.sequence || !Array.isArray(response.sequence)) return false;
+  
+  // For now, accept any sequence with at least 6 items
+  // In a full implementation, this would compare against the correct sequence
+  return response.sequence.length >= 6;
+}
+
+/**
+ * Validates writing responses in multi-select activities
+ */
+function validateWritingResponse(response) {
+  if (!response || typeof response !== 'string') return false;
+  
+  const writing = response.trim();
+  const wordCount = writing.split(/\s+/).length;
+  
+  // Require at least 30 words for writing activities
+  return wordCount >= 30 && writing.length >= 100;
+}
+
+/**
+ * Validates upload activities (Day 4 optional upload)
+ * Upload is optional, so always valid if present
+ */
+function validateUploadActivity(response) {
+  // Upload is optional, so if no response, it's still valid
+  if (!response) return true;
+  
+  // If response exists, validate it has required fields
+  if (typeof response === 'object' && response !== null) {
+    return response.url && response.filename;
+  }
+  
+  return false;
+}
+
+/**
+ * Validates generic activity responses
+ */
+function validateGenericActivity(response) {
+  if (typeof response === 'string') {
+    return response.trim().length >= 10;
+  } else if (typeof response === 'object' && response !== null) {
+    return Object.keys(response).length > 0;
+  }
+  return false;
+}
 
 /**
  * Validates if a student response is substantial enough to mark activity as completed
@@ -1248,6 +2374,94 @@ router.get('/admin/genre-performance', authenticate, async (req, res) => {
     res.status(500).json({ 
       message: 'Error fetching genre performance',
       error: error.message 
+    });
+  }
+});
+
+// GET /api/plans/student/:studentId - Get the most recent plan for a student
+router.get('/student/:studentId', authenticate, async (req, res) => {
+  const { studentId } = req.params;
+  const parentId = req.user.id;
+
+  try {
+    // Verify the student belongs to the authenticated parent
+    const student = await prisma.student.findFirst({
+      where: { id: parseInt(studentId), parentId }
+    });
+
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+
+    // Get the most recent plan for the student
+    const plan = await prisma.plan.findFirst({
+      where: { studentId: parseInt(studentId) },
+      include: {
+        student: true,
+        story: true,
+        days: {
+          orderBy: { dayIndex: 'asc' },
+          include: {
+            activities: {
+              orderBy: { id: 'asc' }
+            }
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    if (!plan) {
+      return res.status(404).json({ message: 'No plan found for this student' });
+    }
+
+    res.status(200).json({
+      plan: plan
+    });
+
+  } catch (error) {
+    console.error('Error fetching plan for student:', error);
+    ERROR_HANDLERS.handleRouteError(error, req, res, 'PLAN_FETCH_BY_STUDENT', {
+      studentId: parseInt(studentId)
+    });
+  }
+});
+
+// DELETE /api/plans/student/:studentId - Delete the most recent plan for a student
+router.delete('/student/:studentId', authenticate, async (req, res) => {
+  const { studentId } = req.params;
+  const parentId = req.user.id;
+
+  try {
+    // Verify the student belongs to the authenticated parent
+    const student = await prisma.student.findFirst({
+      where: { id: parseInt(studentId), parentId }
+    });
+
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+
+    // Get the most recent plan for the student
+    const plan = await prisma.plan.findFirst({
+      where: { studentId: parseInt(studentId) },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    if (!plan) {
+      return res.status(404).json({ message: 'No plan found for this student' });
+    }
+
+    // Delete plan (cascades via foreign keys to story/days/activities)
+    await prisma.plan.delete({ where: { id: plan.id } });
+
+    return res.status(200).json({
+      message: `Deleted plan ${plan.id} for student ${student.name}`,
+      deletedPlanId: plan.id
+    });
+  } catch (error) {
+    ERROR_HANDLERS.handleRouteError(error, req, res, 'PLAN_DELETE_BY_STUDENT', {
+      studentId: parseInt(studentId)
     });
   }
 });

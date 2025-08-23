@@ -34,7 +34,8 @@ model Student {
   // Relations
   parent      Parent       @relation(fields: [parentId], references: [id], onDelete: Cascade)
   assessments Assessment[]
-  weeklyPlans WeeklyPlan[]
+  plans       Plan[]
+  plan3s      Plan3[]
   genreHistory StudentGenreHistory[]
   
   @@map("students")
@@ -72,55 +73,7 @@ model Benchmark {
   @@map("benchmarks")
 }
 
-model WeeklyPlan {
-  id            Int      @id @default(autoincrement())
-  studentId     Int      @map("student_id")
-  interestTheme String   @map("interest_theme")
-  genreCombination String? @map("genre_combination") // e.g., "Futuristic Mystery"
-  cachedPrompt  Json?    @map("cached_prompt")
-  cachedOutput  Json?    @map("cached_output")
-  createdAt     DateTime @default(now()) @map("created_at")
 
-  // Relations
-  student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  chapters      Chapter[]
-  dailyActivities DailyActivity[]
-  
-  @@map("weekly_plans")
-}
-
-model Chapter {
-  id            Int      @id @default(autoincrement())
-  planId        Int      @map("plan_id")
-  chapterNumber Int      @map("chapter_number")
-  title         String
-  content       String
-  summary       String
-  createdAt     DateTime @default(now()) @map("created_at")
-
-  // Relations
-  plan          WeeklyPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
-  
-  @@map("chapters")
-}
-
-model DailyActivity {
-  id             Int      @id @default(autoincrement())
-  planId         Int      @map("plan_id")
-  dayOfWeek      Int      @map("day_of_week") // 1-7
-  activityType   String   @map("activity_type") // e.g., 'Comprehension', 'Vocabulary', 'Game'
-  content        Json     // Questions/prompts for the activity
-  studentResponse Json?   @map("student_response") // Student's answers/responses
-  completed      Boolean  @default(false)
-  completedAt    DateTime? @map("completed_at")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
-
-  // Relations
-  plan           WeeklyPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
-  
-  @@map("daily_activities")
-}
 
 model GenreWord {
   id      Int     @id @default(autoincrement())
@@ -149,4 +102,143 @@ model StudentGenreHistory {
   @@index([genreCombination])
   
   @@map("student_genre_history")
+}
+
+model Plan {
+  id            Int      @id @default(autoincrement())
+  studentId     Int      @map("student_id")
+  name          String   // From story title
+  theme         String   // From story themes array
+  status        String   @default("active") // active, completed
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  story         Story?
+  days          Day[]
+  
+  // Indexes for efficient queries
+  @@index([studentId, createdAt(sort: Desc)])
+  @@index([status])
+  
+  @@map("plans")
+}
+
+model Story {
+  id            Int      @id @default(autoincrement())
+  planId        Int      @unique @map("plan_id")
+  title         String
+  themes        Json     // Array of theme strings
+  part1         String   // Chapter 1 content
+  part2         String   // Chapter 2 content
+  part3         String   // Chapter 3 content
+  vocabulary    Json     // Array of {word: string, definition: string} objects
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  // Relations
+  plan          Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
+  
+  @@map("stories")
+}
+
+model Day {
+  id            Int      @id @default(autoincrement())
+  planId        Int      @map("plan_id")
+  dayIndex      Int      @map("day_index") // 1-5
+  state         String   @default("locked") // locked, available, complete
+  completedAt   DateTime? @map("completed_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  plan          Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
+  activities    Activity[]
+  
+  // Constraints and indexes
+  @@unique([planId, dayIndex])
+  @@index([planId, state])
+  @@index([planId, dayIndex])
+  
+  @@map("days")
+}
+
+model Activity {
+  id            Int      @id @default(autoincrement())
+  dayId         Int      @map("day_id")
+  type          String   // matching, reflection, writing, multi-select
+  prompt        String
+  data          Json     // Activity-specific data (e.g., matching pairs, options)
+  response      Json?    // Student's response
+  isValid       Boolean? @map("is_valid") // Whether the response meets validation criteria
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  day           Day      @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  
+  // Indexes for efficient queries
+  @@index([dayId, type])
+  @@index([isValid])
+  
+  @@map("activities")
+}
+
+// 3-Day Plan Models (New streamlined system)
+model Plan3 {
+  id          String   @id @default(cuid())
+  studentId   Int      @map("student_id")
+  name        String   // From story title
+  theme       String   // From story themes array
+  status      String   @default("active") // active, completed
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  story       Story3?
+  days        Plan3Day[]
+  
+  // Indexes for efficient queries
+  @@index([studentId, createdAt(sort: Desc)])
+  @@index([status])
+  
+  @@map("plan3s")
+}
+
+model Story3 {
+  id            String   @id @default(cuid())
+  plan3Id       String   @unique @map("plan3_id")
+  title         String
+  themes        Json     // Array of theme strings
+  part1         String   // Chapter 1 content (350-500 words)
+  part2         String   // Chapter 2 content (350-500 words)
+  part3         String   // Chapter 3 content (350-500 words)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  // Relations
+  plan3         Plan3    @relation(fields: [plan3Id], references: [id], onDelete: Cascade)
+  
+  @@map("story3s")
+}
+
+model Plan3Day {
+  id        String   @id @default(cuid())
+  plan3Id   String   @map("plan3_id")
+  index     Int      // 1-3 (corresponds to chapter number)
+  state     String   @default("locked") // locked, available, complete
+  completedAt DateTime? @map("completed_at")
+  answers   Json?    // Activity responses: {who: string[], where: string, sequence: string[], mainIdea: string, predict: string}
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  plan3     Plan3    @relation(fields: [plan3Id], references: [id], onDelete: Cascade)
+  
+  // Constraints and indexes
+  @@unique([plan3Id, index])
+  @@index([plan3Id, state])
+  @@index([plan3Id, index])
+  
+  @@map("plan3_days")
 }

@@ -307,6 +307,7 @@ export function StudentForm() {
       <AssessmentLoadingScreen
         studentName={loadingStudentName}
         isVisible={showLoadingScreen}
+        estimatedDuration={45000} // 45 seconds based on observed times
         onComplete={() => {
           setIsSubmitting(false);
           // Navigate to the assessment intro after loading completes

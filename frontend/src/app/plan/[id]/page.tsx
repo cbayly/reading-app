@@ -2,162 +2,111 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { getPlan, saveActivityResponse, generatePlan, generateDayActivity, getStudent, regeneratePlan } from '@/lib/api';
-import WeeklyPlanView from '@/components/WeeklyPlanView';
+import { getPlan, getPlanByStudentId, completePlan, getStudent } from '@/lib/api';
+import PlanHeader from '@/components/PlanHeader';
+import DayList from '@/components/DayList';
 import CompletionCelebration from '@/components/CompletionCelebration';
 import WeeklyPlanLoadingScreen from '@/components/WeeklyPlanLoadingScreen';
-import { WeeklyPlan, DailyActivity, Chapter } from '@/types/weekly-plan';
+import { Plan, Day, Activity } from '@/types/weekly-plan';
 
-export default function WeeklyPlanPage() {
+export default function PlanPage() {
   const params = useParams();
   const router = useRouter();
-  const [plan, setPlan] = useState<WeeklyPlan | null>(null);
+  const [plan, setPlan] = useState<Plan | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [savingActivity, setSavingActivity] = useState<number | null>(null);
-  const [generatingPlan, setGeneratingPlan] = useState(false);
-  const [generatingActivity, setGeneratingActivity] = useState(false);
-  const [generatingDay, setGeneratingDay] = useState<number | null>(null);
-  const [generationError, setGenerationError] = useState<string | null>(null);
-  const [showCelebration, setShowCelebration] = useState(false);
-  const [completedActivity, setCompletedActivity] = useState<{ dayNumber: number; activityType: string } | null>(null);
+  const [completingPlan, setCompletingPlan] = useState(false);
   const [showLoadingScreen, setShowLoadingScreen] = useState(false);
   const [loadingStudentName, setLoadingStudentName] = useState('');
-  const [hasAttemptedDay1Generation, setHasAttemptedDay1Generation] = useState(false);
-  const [regenerating, setRegenerating] = useState(false);
 
   // Define the loading screen completion callback
   const handleLoadingComplete = useCallback(() => {
-    console.log('Weekly plan loading screen onComplete called');
+    console.log('Plan loading screen onComplete called');
     setShowLoadingScreen(false);
-    setGeneratingPlan(false);
+    setCompletingPlan(false);
   }, []);
 
-  const handleAutoGeneratePlan = useCallback(async () => {
+
+
+  const handlePlanComplete = useCallback(async () => {
     try {
-      setGeneratingPlan(true);
+      setCompletingPlan(true);
       setError(null);
       
       // Get student name for loading screen
       try {
-        const studentData = await getStudent(Number(params.id));
+        const studentData = await getStudent(plan?.studentId || 0);
         setLoadingStudentName(studentData.name);
       } catch (err) {
         setLoadingStudentName('Student');
       }
       
       setShowLoadingScreen(true);
-      console.log('Auto-generating plan for student:', params.id);
-      const result = await generatePlan(Number(params.id));
-      console.log('Plan generation result:', result);
+      console.log('Completing plan:', plan?.id);
+      
+      if (!plan) {
+        throw new Error('Plan not available for completion');
+      }
+      
+      const result = await completePlan(plan.id);
+      console.log('Plan completion result:', result);
+      
+      // If a new plan was generated, navigate to it
+      if (result.newPlan) {
+        router.push(`/plan/${result.newPlan.id}`);
+        return;
+      }
+      
+      // Otherwise, update the current plan
       setPlan(result.plan);
       
       // Call loading screen completion manually when generation is actually done
       handleLoadingComplete();
+      
     } catch (err: any) {
-      console.error('Error auto-generating plan:', err);
-      console.log('Generate plan error response:', err?.response);
+      console.error('Error completing plan:', err);
+      console.log('Plan completion error response:', err?.response);
       setShowLoadingScreen(false);
-      setGeneratingPlan(false);
+      setCompletingPlan(false);
       if (err?.response?.data?.message) {
         setError(err.response.data.message);
       } else if (err instanceof Error) {
         setError(err.message);
       } else {
-        setError('Failed to generate weekly plan');
+        setError('Failed to complete plan');
       }
     }
-  }, [params.id]);
-
-  const handleGenerateActivity = useCallback(async (dayOfWeek: number) => {
-    // Prevent multiple simultaneous requests
-    if (generatingActivity) {
-      console.log('Activity generation already in progress, skipping...');
-      return;
-    }
-    
-    try {
-      setGeneratingActivity(true);
-      setGeneratingDay(dayOfWeek);
-      setError(null);
-      
-      console.log('Generating activity for day:', dayOfWeek);
-      
-      // Use plan.id instead of params.id (student ID)
-      if (!plan) {
-        throw new Error('Plan not available for activity generation');
-      }
-      
-      const result = await generateDayActivity(plan.id, dayOfWeek);
-      console.log('Activity generation result:', result);
-      
-      // Update the plan with the new activity
-      if (plan) {
-        setPlan(prevPlan => {
-          if (!prevPlan) return prevPlan;
-          return {
-            ...prevPlan,
-            dailyActivities: prevPlan.dailyActivities.map(activity =>
-              activity.dayOfWeek === dayOfWeek
-                ? { ...activity, ...result.activity }
-                : activity
-            )
-          };
-        });
-      }
-    } catch (err: any) {
-      console.error('Error generating activity:', err);
-      console.log('Generate activity error response:', err?.response);
-      
-      // Handle specific error cases
-      if (err?.response?.status === 409) {
-        // Activity already exists - this is not an error, just refresh the plan
-        console.log('Activity already exists, refreshing plan...');
-        try {
-          const updatedPlan = await getPlan(Number(params.id));
-          setPlan(updatedPlan);
-        } catch (refreshErr) {
-          console.error('Error refreshing plan:', refreshErr);
-        }
-        return; // Don't show error for 409
-      }
-      
-      setGenerationError(err?.response?.data?.message || 'Failed to generate activity');
-      if (err?.response?.data?.message) {
-        setError(err.response.data.message);
-      } else if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('Failed to generate activity');
-      }
-    } finally {
-      setGeneratingActivity(false);
-      setGeneratingDay(undefined);
-    }
-  }, [plan, generatingActivity]);
+  }, [plan, router]);
 
   useEffect(() => {
     const fetchPlan = async () => {
       try {
-        const planData = await getPlan(Number(params.id));
+        // First try to get the plan by ID (in case it's a plan ID)
+        let planData;
+        try {
+          planData = await getPlan(Number(params.id));
+        } catch (planError: any) {
+          // If plan not found by ID, try to get it by student ID
+          if (planError?.response?.status === 404) {
+            console.log('Plan not found by ID, trying to get by student ID...');
+            const studentPlanResponse = await getPlanByStudentId(Number(params.id));
+            planData = studentPlanResponse.plan;
+          } else {
+            throw planError;
+          }
+        }
         setPlan(planData);
-        // Reset the Day 1 generation flag for new plans
-        setHasAttemptedDay1Generation(false);
       } catch (err: any) {
         console.log('Error fetching plan:', err);
         console.log('Error response:', err?.response);
         console.log('Error status:', err?.response?.status);
         
         if (err?.response?.status === 404) {
-          // Auto-generate plan instead of showing error
-          console.log('No plan found, auto-generating...');
-          setLoading(false); // Hide the basic loading spinner before starting generation
-          await handleAutoGeneratePlan();
-          return; // Don't set loading to false again in finally
+          setError('Plan not found. Please create a new plan from the dashboard.');
         } else if (err instanceof Error) {
           setError(err.message);
         } else {
-          setError('Failed to load weekly plan');
+          setError('Failed to load plan');
         }
       } finally {
         setLoading(false);
@@ -167,28 +116,53 @@ export default function WeeklyPlanPage() {
     if (params.id) {
       fetchPlan();
     }
-  }, [params.id, handleAutoGeneratePlan]);
+  }, [params.id]);
 
-  // Separate effect to auto-trigger Day 1 activity generation when plan is loaded
+  // Refetch plan data when user returns to this page (e.g., after completing a day)
   useEffect(() => {
-    if (plan && plan.dailyActivities.length === 0 && !generatingActivity && !generatingPlan && !hasAttemptedDay1Generation) {
-      console.log('Plan loaded, auto-triggering Day 1 activity generation');
-      setHasAttemptedDay1Generation(true);
-      // Small delay to ensure plan state is fully settled
-      const timer = setTimeout(() => {
-        handleGenerateActivity(1);
-      }, 1000); // Increased delay to prevent race conditions
-      
-      return () => clearTimeout(timer);
-    }
-  }, [plan, generatingActivity, generatingPlan, hasAttemptedDay1Generation, handleGenerateActivity]);
+    const handleFocus = async () => {
+      if (params.id && !loading) {
+        console.log('Refreshing plan data on focus...');
+        try {
+          let planData;
+          try {
+            planData = await getPlan(Number(params.id));
+          } catch (planError: any) {
+            if (planError?.response?.status === 404) {
+              const studentPlanResponse = await getPlanByStudentId(Number(params.id));
+              planData = studentPlanResponse.plan;
+            } else {
+              throw planError;
+            }
+          }
+          setPlan(planData);
+        } catch (err: any) {
+          console.error('Error refreshing plan data:', err);
+        }
+      }
+    };
+
+    // Listen for when the window regains focus
+    window.addEventListener('focus', handleFocus);
+    
+    // Also refetch when the page becomes visible again
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        handleFocus();
+      }
+    });
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
+    };
+  }, [params.id, loading]);
 
   // Cleanup effect to ensure loading screen is hidden when component unmounts
   useEffect(() => {
     return () => {
       setShowLoadingScreen(false);
-      setGeneratingPlan(false);
-      setHasAttemptedDay1Generation(false);
+      setCompletingPlan(false);
     };
   }, []);
 
@@ -196,151 +170,23 @@ export default function WeeklyPlanPage() {
     router.push('/dashboard');
   };
 
-  const handleGeneratePlan = async () => {
-    try {
-      setGeneratingPlan(true);
-      setError(null);
-      
-      // Get student name for loading screen
-      try {
-        const studentData = await getStudent(Number(params.id));
-        setLoadingStudentName(studentData.name);
-      } catch (err) {
-        setLoadingStudentName('Student');
-      }
-      
-      setShowLoadingScreen(true);
-      console.log('Generating plan for student:', params.id);
-      const result = await generatePlan(Number(params.id));
-      console.log('Plan generation result:', result);
-      setPlan(result.plan);
-      
-      // Call loading screen completion manually when generation is actually done
-      handleLoadingComplete();
-    } catch (err: any) {
-      console.error('Error generating plan:', err);
-      console.log('Generate plan error response:', err?.response);
-      setShowLoadingScreen(false);
-      setGeneratingPlan(false);
-      if (err?.response?.data?.message) {
-        setError(err.response.data.message);
-      } else if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('Failed to generate weekly plan');
-      }
-    }
-  };
-
-  const handleRegeneratePlan = async () => {
-    if (!params.id || regenerating) return;
-    try {
-      setRegenerating(true);
-      setError(null);
-
-      // Load student name for the loading screen
-      try {
-        const studentData = await getStudent(Number(params.id));
-        setLoadingStudentName(studentData.name);
-      } catch (_) {
-        setLoadingStudentName('Student');
-      }
-
-      // Show full-screen generation overlay
-      setShowLoadingScreen(true);
-
-      const result = await regeneratePlan(Number(params.id));
-      setPlan(result.plan);
-      // Hide loading via onComplete callback to keep animation smooth
-      handleLoadingComplete();
-      setHasAttemptedDay1Generation(false);
-    } catch (err: any) {
-      console.error('Error regenerating plan:', err);
-      setShowLoadingScreen(false);
-      setRegenerating(false);
-      if (err?.response?.data?.message) {
-        setError(err.response.data.message);
-      } else if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('Failed to regenerate weekly plan');
-      }
-    } finally {
-      setRegenerating(false);
-    }
-  };
-
-  const handleActivityResponse = async (activityId: number, response: any) => {
-    try {
-      setSavingActivity(activityId);
-      await saveActivityResponse(activityId, response);
-      
-      // Update the plan state with the new response
-      if (plan) {
-        setPlan(prevPlan => {
-          if (!prevPlan) return prevPlan;
-          return {
-            ...prevPlan,
-            dailyActivities: prevPlan.dailyActivities.map(activity =>
-              activity.id === activityId
-                ? { ...activity, studentResponse: response }
-                : activity
-            )
-          };
-        });
-      }
-    } catch (err) {
-      console.error('Error saving activity response:', err);
-      setError('Failed to save your response. Please try again.');
-    } finally {
-      setSavingActivity(null);
-    }
-  };
-
-
-
-  const handleActivityComplete = async (activityId: number) => {
-    try {
-      setSavingActivity(activityId);
-      await saveActivityResponse(activityId, null, true); // Mark as completed
-      
-      // Find the completed activity for celebration
-      const completedActivity = plan?.dailyActivities.find(a => a.id === activityId);
-      
-      // Update the plan state
-      if (plan) {
-        setPlan(prevPlan => {
-          if (!prevPlan) return prevPlan;
-          return {
-            ...prevPlan,
-            dailyActivities: prevPlan.dailyActivities.map(activity =>
-              activity.id === activityId
-                ? { ...activity, completed: true, completedAt: new Date().toISOString() }
-                : activity
-            )
-          };
-        });
-      }
-      
-      // Show celebration
-      if (completedActivity) {
-        setCompletedActivity({
-          dayNumber: completedActivity.dayOfWeek,
-          activityType: completedActivity.activityType
-        });
-        setShowCelebration(true);
-      }
-    } catch (err) {
-      console.error('Error completing activity:', err);
-      setError('Failed to mark activity as complete. Please try again.');
-    } finally {
-      setSavingActivity(null);
-    }
-  };
-
-  const handleRetryGeneration = () => {
-    if (generatingDay) {
-      handleGenerateActivity(generatingDay);
+  const handleRetry = () => {
+    setError(null);
+    if (params.id) {
+      setLoading(true);
+      // Refetch the plan
+      getPlan(Number(params.id))
+        .then(setPlan)
+        .catch((err: any) => {
+          if (err?.response?.data?.message) {
+            setError(err.response.data.message);
+          } else if (err instanceof Error) {
+            setError(err.message);
+          } else {
+            setError('Failed to load plan');
+          }
+        })
+        .finally(() => setLoading(false));
     }
   };
 
@@ -349,7 +195,7 @@ export default function WeeklyPlanPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading your weekly plan...</p>
+          <p className="mt-4 text-gray-600">Loading your reading plan...</p>
         </div>
       </div>
     );
@@ -367,12 +213,20 @@ export default function WeeklyPlanPage() {
               </div>
             </div>
           </div>
-          <button
-            onClick={handleBackToDashboard}
-            className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            Back to Dashboard
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={handleRetry}
+              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              Try Again
+            </button>
+            <button
+              onClick={handleBackToDashboard}
+              className="flex-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+            >
+              Back to Dashboard
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -383,21 +237,20 @@ export default function WeeklyPlanPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Generating your weekly plan...</p>
+          <p className="mt-4 text-gray-600">Loading your reading plan...</p>
         </div>
       </div>
     );
   }
 
-
-
-  // Show loading screen if generating plan
+  // Show loading screen if completing plan
   if (showLoadingScreen) {
     return (
       <WeeklyPlanLoadingScreen
         studentName={loadingStudentName}
         isVisible={showLoadingScreen}
         onComplete={handleLoadingComplete}
+        estimatedDuration={90000} // 90 seconds for plan completion and new plan generation
       />
     );
   }
@@ -405,58 +258,23 @@ export default function WeeklyPlanPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-6xl mx-auto px-4 py-4">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">
-                Weekly Reading Plan
-              </h1>
-              <p className="text-gray-600">
-                {plan.student?.name}&apos;s {plan.interestTheme} Adventure
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={handleRegeneratePlan}
-                disabled={regenerating}
-                className={`px-4 py-2 rounded-lg transition-colors font-medium ${regenerating ? 'bg-gray-300 text-gray-600 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-700'}`}
-                title="Regenerate a brand new weekly plan"
-              >
-                {regenerating ? 'Regenerating…' : 'Regenerate Plan'}
-              </button>
-              <button
-                onClick={handleBackToDashboard}
-                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium"
-              >
-                Back to Dashboard
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <PlanHeader
+        plan={plan}
+        onBackToDashboard={handleBackToDashboard}
+        onPlanComplete={handlePlanComplete}
+        canComplete={plan.days.every(day => day.state === 'complete')}
+        isCompleting={completingPlan}
+      />
 
       {/* Main Content */}
       <div className="max-w-6xl mx-auto px-4 py-8">
-        <WeeklyPlanView 
-          plan={plan}
-          onActivityResponse={handleActivityResponse}
-          onGenerateActivity={handleGenerateActivity}
-          onActivityComplete={handleActivityComplete}
-          isGeneratingActivity={generatingActivity}
-          generatingDay={generatingDay || undefined}
-          error={generationError || undefined}
-          onRetry={handleRetryGeneration}
+        <DayList
+          days={plan.days}
+          planId={plan.id}
         />
       </div>
 
-      {/* Completion Celebration */}
-      <CompletionCelebration
-        isVisible={showCelebration}
-        dayNumber={completedActivity?.dayNumber || 1}
-        activityType={completedActivity?.activityType || 'Activity'}
-        onClose={() => setShowCelebration(false)}
-      />
+
 
     </div>
   );

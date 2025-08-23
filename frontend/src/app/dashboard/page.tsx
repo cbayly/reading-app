@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/lib/auth';
-import { getAssessments, createAssessment, deleteStudent, updateStudent } from '@/lib/api';
+import { getAssessments, createAssessment, deleteStudent, updateStudent, deleteCurrentPlanForStudent, getPlanByStudentId } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
 import Toast from '@/components/ui/Toast';
 import { useRouter } from 'next/navigation';
@@ -35,9 +35,11 @@ export default function DashboardPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deletingPlanStudentId, setDeletingPlanStudentId] = useState<number | null>(null);
   const [showLoadingScreen, setShowLoadingScreen] = useState(false);
   const [loadingStudentName, setLoadingStudentName] = useState('');
   const [toast, setToast] = useState<{open: boolean; message: string; type?: 'success'|'error'|'info'}>({open: false, message: ''});
+  const [plansByStudent, setPlansByStudent] = useState<Record<number, { exists: boolean; planId?: number }>>({});
   
 
   useEffect(() => {
@@ -68,6 +70,29 @@ export default function DashboardPage() {
           const data = await getAssessments();
           console.log('Fetched students:', data);
           setStudents(data);
+
+          // After loading students, check if each has a current plan
+          try {
+            const results = await Promise.all(
+              (data || []).map(async (s: Student) => {
+                try {
+                  const planRes: any = await getPlanByStudentId(s.id);
+                  const planId = planRes?.plan?.id ?? planRes?.id;
+                  return [s.id, { exists: true, planId }] as const;
+                } catch (e: any) {
+                  if (e?.response?.status === 404) {
+                    return [s.id, { exists: false }] as const;
+                  }
+                  // For other errors, default to unknown/false without breaking dashboard
+                  console.warn('Plan check error for student', s.id, e);
+                  return [s.id, { exists: false }] as const;
+                }
+              })
+            );
+            setPlansByStudent(Object.fromEntries(results));
+          } catch (planCheckErr) {
+            console.warn('Bulk plan check failed:', planCheckErr);
+          }
         } catch (err) {
           console.error('Error fetching students:', err);
           console.error('Error details:', {
@@ -234,6 +259,8 @@ export default function DashboardPage() {
               {students.map((student) => {
                 const latestAssessment = student.assessments[0];
                 const hasCompletedAssessment = latestAssessment?.status === 'completed';
+                const hasAnyAssessment = student.assessments.length > 0;
+                const hasPlan = plansByStudent[student.id]?.exists === true;
                 
                 return (
                   <div key={student.id} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
@@ -279,13 +306,36 @@ export default function DashboardPage() {
                           >
                             View Results
                           </Button>
-                          <Button
-                            variant="secondary"
-                            className="w-full"
-                            onClick={() => router.push(`/plan/${student.id}`)}
-                          >
-                            View Weekly Plan
-                          </Button>
+                          {hasPlan && (
+                            <>
+                              <Button
+                                variant="secondary"
+                                className="w-full"
+                                onClick={() => router.push(`/plan/${student.id}`)}
+                              >
+                                View Weekly Plan
+                              </Button>
+                              <button
+                                className={`w-full inline-flex items-center justify-center rounded-md border px-4 py-2 text-sm ${deletingPlanStudentId === student.id ? 'border-red-100 text-red-300' : 'border-red-200 text-red-700 hover:bg-red-50'}`}
+                                disabled={deletingPlanStudentId === student.id}
+                                onClick={async () => {
+                                  if (!confirm(`Delete current plan for ${student.name}? This cannot be undone.`)) return;
+                                  try {
+                                    setDeletingPlanStudentId(student.id);
+                                    const res = await deleteCurrentPlanForStudent(student.id);
+                                    setToast({ open: true, message: res.message || 'Deleted current plan', type: 'success' });
+                                    setPlansByStudent(prev => ({ ...prev, [student.id]: { exists: false } }));
+                                  } catch (e: any) {
+                                    setToast({ open: true, message: e?.response?.data?.message || 'Failed to delete plan', type: 'error' });
+                                  } finally {
+                                    setDeletingPlanStudentId(null);
+                                  }
+                                }}
+                              >
+                                {deletingPlanStudentId === student.id ? 'Deleting…' : 'Delete Current Plan'}
+                              </button>
+                            </>
+                          )}
                         </>
                       ) : (
                         <Button
@@ -293,6 +343,12 @@ export default function DashboardPage() {
                           onClick={async () => {
                             // Prevent multiple clicks
                             if (creatingAssessment === student.id) return;
+                            
+                            // If there's an existing assessment, navigate to it
+                            if (hasAnyAssessment && latestAssessment) {
+                              router.push(`/assessment/${latestAssessment.id}/intro`);
+                              return;
+                            }
                             
                             try {
                               setCreatingAssessment(student.id);
@@ -338,7 +394,7 @@ export default function DashboardPage() {
                           }}
                           disabled={creatingAssessment === student.id}
                         >
-                          {creatingAssessment === student.id ? 'Creating Assessment...' : 'Start Assessment'}
+                          {creatingAssessment === student.id ? 'Creating Assessment...' : (hasAnyAssessment ? 'Resume Assessment' : 'Generate Assessment')}
                         </Button>
                       )}
                     </div>
@@ -365,7 +421,11 @@ export default function DashboardPage() {
       <AssessmentLoadingScreen
         studentName={loadingStudentName}
         isVisible={showLoadingScreen}
-        // No onComplete handler to avoid race; navigation happens on API success
+        estimatedDuration={45000} // 45 seconds based on observed times
+        onComplete={() => {
+          // This will be called when the loading screen is hidden
+          // The actual navigation happens in the API success handler
+        }}
       />
       <Toast open={toast.open} onClose={() => setToast({open:false,message:''})} message={toast.message} type={toast.type}/>
       </div>

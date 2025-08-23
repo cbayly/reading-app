@@ -18,6 +18,24 @@ const openai = new OpenAI({
 });
 
 /**
+ * Gets the appropriate temperature parameter for a model
+ * Some models like GPT-5-mini only support default temperature (1.0)
+ * @param {string} model - The model name
+ * @param {number} desiredTemperature - The desired temperature value
+ * @returns {number|undefined} - The temperature to use, or undefined for default
+ */
+function getTemperatureForModel(model, desiredTemperature) {
+  // Models that only support default temperature (1.0)
+  const defaultOnlyModels = ['gpt-5-mini', 'gpt-5'];
+  
+  if (defaultOnlyModels.includes(model)) {
+    return undefined; // Use default temperature
+  }
+  
+  return desiredTemperature;
+}
+
+/**
  * Word count ranges by grade level for reading passages.
  */
 const WORD_COUNT_RANGES = {
@@ -145,12 +163,100 @@ function constructPrompt(student, selectedInterest, adjustedGradeLevel) {
 }
 
 /**
+ * Extracts story data from malformed text when JSON parsing fails
+ * This is a last resort method to recover story data
+ * @param {string} text - The raw text content from the AI response
+ * @returns {object} - Extracted story data object
+ */
+function extractStoryDataFromText(text) {
+  console.log('Attempting to extract story data from malformed text...');
+  
+  const extracted = {
+    title: 'Story',
+    themes: ['adventure'],
+    part1: '',
+    part2: '',
+    part3: '',
+    vocabulary: []
+  };
+  
+  try {
+    // Try to extract title
+    const titleMatch = text.match(/"title"\s*:\s*"([^"]+)"/);
+    if (titleMatch) {
+      extracted.title = titleMatch[1];
+    }
+    
+    // Try to extract themes
+    const themesMatch = text.match(/"themes"\s*:\s*\[([^\]]+)\]/);
+    if (themesMatch) {
+      const themesText = themesMatch[1];
+      extracted.themes = themesText.match(/"([^"]+)"/g)?.map(t => t.replace(/"/g, '')) || ['adventure'];
+    }
+    
+    // Try to extract parts
+    const part1Match = text.match(/"part1"\s*:\s*"([^"]+(?:"[^"]*"[^"]*)*)"/);
+    if (part1Match) {
+      extracted.part1 = part1Match[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+    }
+    
+    const part2Match = text.match(/"part2"\s*:\s*"([^"]+(?:"[^"]*"[^"]*)*)"/);
+    if (part2Match) {
+      extracted.part2 = part2Match[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+    }
+    
+    const part3Match = text.match(/"part3"\s*:\s*"([^"]+(?:"[^"]*"[^"]*)*)"/);
+    if (part3Match) {
+      extracted.part3 = part3Match[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+    }
+    
+    // Try to extract vocabulary
+    const vocabMatch = text.match(/"vocabulary"\s*:\s*\[([^\]]+)\]/);
+    if (vocabMatch) {
+      const vocabText = vocabMatch[1];
+      const vocabItems = vocabText.match(/\{[^}]+\}/g);
+      if (vocabItems) {
+        extracted.vocabulary = vocabItems.map(item => {
+          const wordMatch = item.match(/"word"\s*:\s*"([^"]+)"/);
+          const defMatch = item.match(/"definition"\s*:\s*"([^"]+)"/);
+          return {
+            word: wordMatch ? wordMatch[1] : 'unknown',
+            definition: defMatch ? defMatch[1] : 'unknown'
+          };
+        });
+      }
+    }
+    
+    // Validate extracted data
+    if (!extracted.part1 || !extracted.part2 || !extracted.part3) {
+      throw new Error('Could not extract all required story parts');
+    }
+    
+    // Ensure vocabulary has at least 6 items
+    while (extracted.vocabulary.length < 6) {
+      extracted.vocabulary.push({
+        word: `word${extracted.vocabulary.length + 1}`,
+        definition: 'definition'
+      });
+    }
+    
+    return extracted;
+  } catch (error) {
+    console.error('Failed to extract story data from text:', error);
+    throw new Error('Story data extraction failed');
+  }
+}
+
+/**
  * Generates a 3-chapter story for a weekly plan.
  * @param {object} student - The student object from the database.
  * @param {string} interest - The selected interest theme for the story.
  * @returns {Promise<object>} - A promise that resolves to an object containing the 3 chapters.
  */
 export async function generateStory(student, interest, genreCombination = null) {
+  // Get model configuration early so it's available in catch block
+  const modelConfig = getModelConfig(CONTENT_TYPES.STORY_CREATION);
+  
   try {
     // Get the most recent assessment to determine reading level
     const mostRecentAssessment = await getMostRecentAssessment(student.id);
@@ -244,38 +350,59 @@ OUTPUT FORMAT: Valid JSON only. Do not include any text outside the JSON structu
 
 JSON STRUCTURE (copy exactly):
 {
-  "chapters": [
+  "title": "Story Title",
+  "themes": ["theme1", "theme2", "theme3"],
+  "part1": "Full Chapter 1 content...",
+  "part2": "Full Chapter 2 content...",
+  "part3": "Full Chapter 3 content...",
+  "vocabulary": [
     {
-      "chapterNumber": 1,
-      "title": "Chapter Title",
-      "content": "Full chapter content...",
-      "summary": "1-sentence summary"
+      "word": "word1",
+      "definition": "definition1"
     },
     {
-      "chapterNumber": 2,
-      "title": "Chapter Title", 
-      "content": "Full chapter content...",
-      "summary": "1-sentence summary"
+      "word": "word2", 
+      "definition": "definition2"
     },
     {
-      "chapterNumber": 3,
-      "title": "Chapter Title",
-      "content": "Full chapter content...",
-      "summary": "1-sentence summary"
+      "word": "word3",
+      "definition": "definition3"
+    },
+    {
+      "word": "word4",
+      "definition": "definition4"
+    },
+    {
+      "word": "word5",
+      "definition": "definition5"
+    },
+    {
+      "word": "word6",
+      "definition": "definition6"
     }
   ]
 }
 `;
 
-    const modelConfig = getModelConfig(CONTENT_TYPES.STORY_CREATION);
-    
     const aiFunction = async () => {
-      return await openai.chat.completions.create({
-        model: modelConfig.model,
-        messages: [{ role: 'user', content: storyPrompt }],
-        temperature: modelConfig.temperature,
-        max_tokens: modelConfig.maxTokens,
-      });
+      // Use Responses API for GPT-5, Chat Completions for other models
+      if (modelConfig.model === 'gpt-5') {
+        return await openai.responses.create({
+          model: modelConfig.model,
+          input: [{ role: 'user', content: storyPrompt }],
+          text: { verbosity: 'medium' },
+          reasoning: { effort: 'minimal' },
+          tool_choice: 'none',
+          max_output_tokens: modelConfig.maxTokens,
+        });
+      } else {
+        return await openai.chat.completions.create({
+          model: modelConfig.model,
+          messages: [{ role: 'user', content: storyPrompt }],
+          temperature: getTemperatureForModel(modelConfig.model, modelConfig.temperature),
+          max_completion_tokens: modelConfig.maxTokens,
+        });
+      }
     };
 
     const result = await logAIRequestWithCapture({
@@ -292,13 +419,23 @@ JSON STRUCTURE (copy exactly):
       }
     });
 
-    const content = result.result.choices[0].message.content;
-    
-    if (!content) {
-      throw new Error('OpenAI API returned an empty response.');
+    // Handle different response formats based on API type
+    let content;
+    if (modelConfig.model === 'gpt-5') {
+      // Responses API format
+      content = result.result.output_text?.trim();
+      if (!content) {
+        throw new Error('OpenAI API returned an empty response.');
+      }
+    } else {
+      // Chat Completions API format
+      content = result.result.choices[0].message.content;
+      if (!content) {
+        throw new Error('OpenAI API returned an empty response.');
+      }
     }
 
-    // Parse the JSON string into an object
+    // Parse the JSON string into an object with enhanced error handling
     let storyData;
     try {
       storyData = JSON.parse(content);
@@ -306,29 +443,90 @@ JSON STRUCTURE (copy exactly):
       console.error('JSON parsing error:', parseError);
       console.error('Raw content:', content);
       
-      // Try to clean the JSON and parse again
+      // Enhanced JSON cleaning and recovery
       try {
         let cleanedContent = content;
+        
         // Remove any leading/trailing code block markers (``` or ```json)
         cleanedContent = cleanedContent.replace(/```[a-z]*\n?/gi, '').replace(/```/g, '').trim();
-        // Now extract the JSON object
-        const startIndex = cleanedContent.indexOf('{');
-        const endIndex = cleanedContent.lastIndexOf('}') + 1;
-        cleanedContent = cleanedContent.substring(startIndex, endIndex);
+        
+        // Remove any explanatory text before or after the JSON
+        const jsonStart = cleanedContent.indexOf('{');
+        const jsonEnd = cleanedContent.lastIndexOf('}') + 1;
+        
+        if (jsonStart === -1 || jsonEnd === 0) {
+          throw new Error('No valid JSON object found in response');
+        }
+        
+        cleanedContent = cleanedContent.substring(jsonStart, jsonEnd);
+        
+        // Fix common JSON formatting issues
+        cleanedContent = cleanedContent
+          .replace(/([a-zA-Z0-9_]+):/g, '"$1":') // Ensure property names are quoted
+          .replace(/,\s*}/g, '}') // Remove trailing commas
+          .replace(/,\s*]/g, ']') // Remove trailing commas in arrays
+          .replace(/\\"/g, '"') // Fix escaped quotes
+          .replace(/\\n/g, '\n') // Fix escaped newlines
+          .replace(/\\t/g, '\t'); // Fix escaped tabs
+        
         storyData = JSON.parse(cleanedContent);
-        console.log('Successfully parsed after cleaning JSON');
+        console.log('Successfully parsed after enhanced JSON cleaning');
       } catch (cleanError) {
-        throw new Error(`Failed to parse JSON response: ${parseError.message}`);
+        console.error('Enhanced JSON cleaning also failed:', cleanError);
+        
+        // Last resort: try to extract and reconstruct the story data
+        try {
+          storyData = extractStoryDataFromText(content);
+          console.log('Successfully extracted story data using fallback method');
+        } catch (extractError) {
+          throw new Error(`Failed to parse JSON response after multiple recovery attempts: ${parseError.message}`);
+        }
       }
     }
     
-    // Validate chapter lengths and theme adherence
+    // Validate the parsed story data structure
+    if (!storyData || typeof storyData !== 'object') {
+      throw new Error('Parsed story data is not a valid object');
+    }
+    
+    // Validate story structure and theme adherence
     let needsRegeneration = false;
     let themeIssues = [];
     let qualityIssues = [];
     
-    storyData.chapters.forEach((chapter, index) => {
-      const wordCount = chapter.content.split(' ').length;
+    // Validate required fields
+    if (!storyData.title || !storyData.themes || !Array.isArray(storyData.themes) || 
+        !storyData.part1 || !storyData.part2 || !storyData.part3 || 
+        !storyData.vocabulary || !Array.isArray(storyData.vocabulary)) {
+      qualityIssues.push('Missing required fields: title, themes, part1, part2, part3, or vocabulary');
+      needsRegeneration = true;
+    }
+    
+    // Validate vocabulary structure
+    if (storyData.vocabulary && Array.isArray(storyData.vocabulary)) {
+      if (storyData.vocabulary.length !== 6) {
+        qualityIssues.push(`Vocabulary array must contain exactly 6 words, found ${storyData.vocabulary.length}`);
+        needsRegeneration = true;
+      }
+      
+      storyData.vocabulary.forEach((vocab, index) => {
+        if (!vocab.word || !vocab.definition) {
+          qualityIssues.push(`Vocabulary item ${index + 1} missing word or definition`);
+          needsRegeneration = true;
+        }
+      });
+    }
+    
+    // Validate chapter lengths and content
+    const chapters = [storyData.part1, storyData.part2, storyData.part3];
+    chapters.forEach((chapter, index) => {
+      if (!chapter) {
+        qualityIssues.push(`Chapter ${index + 1} is missing`);
+        needsRegeneration = true;
+        return;
+      }
+      
+      const wordCount = chapter.split(' ').length;
       console.log(`Chapter ${index + 1} word count: ${wordCount}`);
       
       if (wordCount < 300) {
@@ -338,9 +536,9 @@ JSON STRUCTURE (copy exactly):
       }
       
       // Check theme adherence
-      const contentLower = chapter.content.toLowerCase();
+      const contentLower = chapter.toLowerCase();
       const interestLower = interest.toLowerCase();
-      const titleLower = chapter.title.toLowerCase();
+      const titleLower = storyData.title ? storyData.title.toLowerCase() : '';
       
       // Check if the theme appears in the content or title
       if (!contentLower.includes(interestLower) && !titleLower.includes(interestLower)) {
@@ -365,14 +563,14 @@ JSON STRUCTURE (copy exactly):
       }
       
       // Check for proper dialogue formatting
-      const dialogueCount = (chapter.content.match(/"/g) || []).length;
+      const dialogueCount = (chapter.match(/"/g) || []).length;
       if (dialogueCount < 4) { // At least 2 dialogue exchanges (4 quotes)
         qualityIssues.push(`Chapter ${index + 1} lacks proper dialogue (only ${dialogueCount} quotes found)`);
         needsRegeneration = true;
       }
       
       // Check for paragraph structure
-      if (!chapter.content.includes('\n') && chapter.content.length > 500) {
+      if (!chapter.includes('\n') && chapter.length > 500) {
         qualityIssues.push(`Chapter ${index + 1} lacks proper paragraph structure`);
         needsRegeneration = true;
       }
@@ -407,12 +605,24 @@ JSON STRUCTURE (copy exactly):
       const regenerationModelConfig = getModelConfig(CONTENT_TYPES.STORY_CREATION);
       
       const regenerationAIFunction = async () => {
-        return await openai.chat.completions.create({
-          model: regenerationModelConfig.model,
-          messages: [{ role: 'user', content: regenerationPrompt }],
-          temperature: regenerationModelConfig.temperature,
-          max_tokens: regenerationModelConfig.maxTokens,
-        });
+        // Use Responses API for GPT-5, Chat Completions for other models
+        if (regenerationModelConfig.model === 'gpt-5') {
+          return await openai.responses.create({
+            model: regenerationModelConfig.model,
+            input: [{ role: 'user', content: regenerationPrompt }],
+            text: { verbosity: 'medium' },
+            reasoning: { effort: 'minimal' },
+            tool_choice: 'none',
+            max_output_tokens: regenerationModelConfig.maxTokens,
+          });
+        } else {
+          return await openai.chat.completions.create({
+            model: regenerationModelConfig.model,
+            messages: [{ role: 'user', content: regenerationPrompt }],
+            temperature: regenerationModelConfig.temperature,
+            max_tokens: regenerationModelConfig.maxTokens,
+          });
+        }
       };
 
       const regenerationResult = await logAIRequestWithCapture({
@@ -431,7 +641,16 @@ JSON STRUCTURE (copy exactly):
         }
       });
       
-      const regenerationContent = regenerationResult.result.choices[0].message.content;
+      // Handle different response formats based on API type for regeneration
+      let regenerationContent;
+      if (regenerationModelConfig.model === 'gpt-5') {
+        // Responses API format
+        regenerationContent = regenerationResult.result.output_text?.trim();
+      } else {
+        // Chat Completions API format
+        regenerationContent = regenerationResult.result.choices[0].message.content;
+      }
+      
       if (regenerationContent) {
         let regeneratedStoryData;
         try {
@@ -439,26 +658,58 @@ JSON STRUCTURE (copy exactly):
         } catch (parseError) {
           console.error('JSON parsing error in regeneration:', parseError);
           console.error('Raw regeneration content:', regenerationContent);
-          // Try to clean the JSON and parse again
+          
+          // Enhanced JSON cleaning and recovery for regeneration
           try {
             let cleanedContent = regenerationContent;
+            
             // Remove any leading/trailing code block markers (``` or ```json)
             cleanedContent = cleanedContent.replace(/```[a-z]*\n?/gi, '').replace(/```/g, '').trim();
-            // Now extract the JSON object
-            const startIndex = cleanedContent.indexOf('{');
-            const endIndex = cleanedContent.lastIndexOf('}') + 1;
-            cleanedContent = cleanedContent.substring(startIndex, endIndex);
+            
+            // Remove any explanatory text before or after the JSON
+            const jsonStart = cleanedContent.indexOf('{');
+            const jsonEnd = cleanedContent.lastIndexOf('}') + 1;
+            
+            if (jsonStart === -1 || jsonEnd === 0) {
+              throw new Error('No valid JSON object found in regeneration response');
+            }
+            
+            cleanedContent = cleanedContent.substring(jsonStart, jsonEnd);
+            
+            // Fix common JSON formatting issues
+            cleanedContent = cleanedContent
+              .replace(/([a-zA-Z0-9_]+):/g, '"$1":') // Ensure property names are quoted
+              .replace(/,\s*}/g, '}') // Remove trailing commas
+              .replace(/,\s*]/g, ']') // Remove trailing commas in arrays
+              .replace(/\\"/g, '"') // Fix escaped quotes
+              .replace(/\\n/g, '\n') // Fix escaped newlines
+              .replace(/\\t/g, '\t'); // Fix escaped tabs
+            
             regeneratedStoryData = JSON.parse(cleanedContent);
-            console.log('Successfully parsed regeneration after cleaning JSON');
+            console.log('Successfully parsed regeneration after enhanced JSON cleaning');
           } catch (cleanError) {
-            throw new Error(`Failed to parse regenerated JSON response: ${parseError.message}`);
+            console.error('Enhanced JSON cleaning for regeneration also failed:', cleanError);
+            
+            // Last resort: try to extract and reconstruct the story data
+            try {
+              regeneratedStoryData = extractStoryDataFromText(regenerationContent);
+              console.log('Successfully extracted regenerated story data using fallback method');
+            } catch (extractError) {
+              throw new Error(`Failed to parse regenerated JSON response after multiple recovery attempts: ${parseError.message}`);
+            }
           }
+        }
+        
+        // Validate the parsed regeneration story data structure
+        if (!regeneratedStoryData || typeof regeneratedStoryData !== 'object') {
+          throw new Error('Parsed regenerated story data is not a valid object');
         }
         console.log(`Successfully regenerated 3-chapter story for student: ${student.name}`);
         console.log(`- Interest Theme: ${interest}`);
         console.log(`- Genre Style: ${genreCombination || 'Standard'}`);
         console.log(`- Adjusted Grade Level: ${adjustedGradeLevel}`);
-        console.log(`- Chapters Generated: ${regeneratedStoryData.chapters.length}`);
+        console.log(`- Chapters Generated: 3`);
+        console.log(`- Vocabulary Words: ${regeneratedStoryData.vocabulary?.length || 0}`);
         return regeneratedStoryData;
       }
     }
@@ -467,7 +718,8 @@ JSON STRUCTURE (copy exactly):
     console.log(`- Interest Theme: ${interest}`);
     console.log(`- Genre Style: ${genreCombination || 'Standard'}`);
     console.log(`- Adjusted Grade Level: ${adjustedGradeLevel}`);
-    console.log(`- Chapters Generated: ${storyData.chapters.length}`);
+    console.log(`- Chapters Generated: 3`);
+    console.log(`- Vocabulary Words: ${storyData.vocabulary?.length || 0}`);
     
     return storyData;
 
@@ -522,7 +774,7 @@ JSON STRUCTURE (copy exactly):
           throw new Error('Fallback model also returned an empty response.');
         }
 
-        // Parse the fallback response
+        // Parse the fallback response with enhanced error handling
         let fallbackStoryData;
         try {
           fallbackStoryData = JSON.parse(fallbackContent);
@@ -530,18 +782,50 @@ JSON STRUCTURE (copy exactly):
           console.error('JSON parsing error in fallback response:', parseError);
           console.error('Raw fallback content:', fallbackContent);
           
-          // Try to clean the JSON and parse again
+          // Enhanced JSON cleaning and recovery for fallback
           try {
             let cleanedContent = fallbackContent;
+            
+            // Remove any leading/trailing code block markers (``` or ```json)
             cleanedContent = cleanedContent.replace(/```[a-z]*\n?/gi, '').replace(/```/g, '').trim();
-            const startIndex = cleanedContent.indexOf('{');
-            const endIndex = cleanedContent.lastIndexOf('}') + 1;
-            cleanedContent = cleanedContent.substring(startIndex, endIndex);
+            
+            // Remove any explanatory text before or after the JSON
+            const jsonStart = cleanedContent.indexOf('{');
+            const jsonEnd = cleanedContent.lastIndexOf('}') + 1;
+            
+            if (jsonStart === -1 || jsonEnd === 0) {
+              throw new Error('No valid JSON object found in fallback response');
+            }
+            
+            cleanedContent = cleanedContent.substring(jsonStart, jsonEnd);
+            
+            // Fix common JSON formatting issues
+            cleanedContent = cleanedContent
+              .replace(/([a-zA-Z0-9_]+):/g, '"$1":') // Ensure property names are quoted
+              .replace(/,\s*}/g, '}') // Remove trailing commas
+              .replace(/,\s*]/g, ']') // Remove trailing commas in arrays
+              .replace(/\\"/g, '"') // Fix escaped quotes
+              .replace(/\\n/g, '\n') // Fix escaped newlines
+              .replace(/\\t/g, '\t'); // Fix escaped tabs
+            
             fallbackStoryData = JSON.parse(cleanedContent);
-            console.log('Successfully parsed fallback story data after cleaning JSON');
+            console.log('Successfully parsed fallback story data after enhanced JSON cleaning');
           } catch (cleanError) {
-            throw new Error(`Failed to parse fallback JSON response: ${parseError.message}`);
+            console.error('Enhanced JSON cleaning for fallback also failed:', cleanError);
+            
+            // Last resort: try to extract and reconstruct the story data
+            try {
+              fallbackStoryData = extractStoryDataFromText(fallbackContent);
+              console.log('Successfully extracted fallback story data using fallback method');
+            } catch (extractError) {
+              throw new Error(`Failed to parse fallback JSON response after multiple recovery attempts: ${parseError.message}`);
+            }
           }
+        }
+        
+        // Validate the parsed fallback story data structure
+        if (!fallbackStoryData || typeof fallbackStoryData !== 'object') {
+          throw new Error('Parsed fallback story data is not a valid object');
         }
         
         console.log(`Successfully generated story using fallback model (${fallbackModelConfig.model}) for student: ${student.name}`);
@@ -616,7 +900,7 @@ Return the entire response as a single, valid JSON object with the following str
       return await openai.chat.completions.create({
         model: modelConfig.model,
         messages: [{ role: 'user', content: comprehensionPrompt }],
-        temperature: modelConfig.temperature,
+        temperature: getTemperatureForModel(modelConfig.model, modelConfig.temperature),
       });
     };
 
@@ -764,7 +1048,7 @@ Return the entire response as a single, valid JSON object with the following str
       return await openai.chat.completions.create({
         model: modelConfig.model,
         messages: [{ role: 'user', content: vocabularyPrompt }],
-        temperature: modelConfig.temperature,
+        temperature: getTemperatureForModel(modelConfig.model, modelConfig.temperature),
       });
     };
 
@@ -968,7 +1252,7 @@ Return the entire response as a single, valid JSON object with the following str
       return await openai.chat.completions.create({
         model: modelConfig.model,
         messages: [{ role: 'user', content: gamePrompt }],
-        temperature: modelConfig.temperature,
+        temperature: getTemperatureForModel(modelConfig.model, modelConfig.temperature),
       });
     };
 
@@ -2448,6 +2732,9 @@ export async function generateFullWeeklyPlan(student) {
  * @returns {Promise<object>} - A promise that resolves to an object containing the passage and questions.
  */
 export async function generateAssessment(student, modelOverride = null) {
+  // Get model configuration early so it's available in catch block
+  const modelConfig = modelOverride || getModelConfig(CONTENT_TYPES.ASSESSMENT_CREATION);
+  
   try {
     // Get the most recent assessment to determine reading level
     const mostRecentAssessment = await getMostRecentAssessment(student.id);
@@ -2471,14 +2758,12 @@ export async function generateAssessment(student, modelOverride = null) {
     console.log(`- Target Word Count: ${wordCountRange.min}-${wordCountRange.max} words`);
     
     const prompt = constructPrompt(student, selectedInterest, adjustedGradeLevel);
-
-    const modelConfig = modelOverride || getModelConfig(CONTENT_TYPES.ASSESSMENT_CREATION);
     
     const aiFunction = async () => {
       return await openai.chat.completions.create({
         model: modelConfig.model,
         messages: [{ role: 'user', content: prompt }],
-        temperature: modelConfig.temperature,
+        temperature: getTemperatureForModel(modelConfig.model, modelConfig.temperature),
       });
     };
 

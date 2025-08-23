@@ -4,15 +4,20 @@ interface WeeklyPlanLoadingScreenProps {
   studentName: string;
   isVisible: boolean;
   onComplete?: () => void;
+  estimatedDuration?: number; // Duration in milliseconds
 }
 
 const WeeklyPlanLoadingScreen: React.FC<WeeklyPlanLoadingScreenProps> = ({
   studentName,
   isVisible,
-  onComplete
+  onComplete,
+  estimatedDuration = 60000 // Default 60 seconds for weekly plan generation
 }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const [startTime, setStartTime] = useState<number | null>(null);
 
   // All possible loading messages for weekly plan generation
   const allLoadingMessages = [
@@ -35,45 +40,82 @@ const WeeklyPlanLoadingScreen: React.FC<WeeklyPlanLoadingScreenProps> = ({
     "Asking the moon for bedtime story inspiration…",
     "Teaching the clouds to rain story ideas…",
     "Unlocking the secret garden of reading adventures…",
-    "Gathering the rainbow colors for a colorful story…"
+    "Gathering the rainbow colors for a colorful story…",
+    "Consulting the ancient scrolls of storytelling wisdom…",
+    "Teaching the phoenix to rise from the story ashes…",
+    "Gathering the whispers of the wind for plot inspiration…",
+    "Asking the stars to align for the perfect narrative…",
+    "Teaching the mermaids to sing story melodies…",
+    "Unlocking the door to the library of infinite tales…",
+    "Gathering the echoes of forgotten legends…",
+    "Teaching the time travelers to navigate story timelines…",
+    "Asking the crystal mountains for story structure advice…",
+    "Gathering the dreams of sleeping giants…",
+    "Teaching the shadow creatures to dance in story light…",
+    "Unlocking the vault of character personalities…",
+    "Gathering the morning dew for fresh story beginnings…",
+    "Asking the thunder for dramatic story moments…",
+    "Teaching the river spirits to flow through story pages…",
+    "Gathering the autumn leaves for story endings…",
+    "Unlocking the secrets of the story universe…",
+    "Teaching the winter winds to carry story magic…",
+    "Gathering the spring blossoms for story renewal…",
+    "Asking the summer sun to warm the story hearts…"
   ];
 
   // Function to shuffle array and get random items
   const getRandomSteps = () => {
     const shuffled = [...allLoadingMessages].sort(() => 0.5 - Math.random());
-    return shuffled.slice(0, 4);
+    // Get more steps for longer estimated duration
+    const stepCount = Math.max(6, Math.min(12, Math.ceil(estimatedDuration / 8000)));
+    return shuffled.slice(0, stepCount);
   };
 
   // Use useMemo to ensure steps are only generated once per loading session
-  const steps = useMemo(() => getRandomSteps(), []);
+  const steps = useMemo(() => getRandomSteps(), [estimatedDuration]);
 
   useEffect(() => {
     if (!isVisible) {
       setCurrentStep(0);
       setIsAnimating(false);
+      setProgress(0);
+      setStartTime(null);
+      setElapsedTime(0);
       return;
     }
 
     setIsAnimating(true);
+    const currentStartTime = Date.now();
+    setStartTime(currentStartTime);
+    setProgress(0);
+    setElapsedTime(0);
     
-    // Animate through each step with delays
-    const stepDelays = [2000, 6000, 12000, 20000]; // Longer delays for story generation
-    
-    const timers = stepDelays.map((delay, index) => 
-      setTimeout(() => {
-        if (isVisible) { // Check if still visible before updating
-          setCurrentStep(index + 1);
-        }
-      }, delay)
-    );
-
-    // Don't auto-complete, wait for parent to call onComplete
-    // The parent will call onComplete when the actual generation is done
+    // Progress update interval (every 500ms for smooth progress bar)
+    const progressInterval = setInterval(() => {
+      const elapsed = Date.now() - currentStartTime;
+      setElapsedTime(elapsed);
+      const newProgress = Math.min((elapsed / estimatedDuration) * 100, 95); // Cap at 95% until complete
+      setProgress(newProgress);
+      
+      // Update current step based on progress
+      const stepProgress = (elapsed / estimatedDuration) * steps.length;
+      const newStep = Math.min(Math.floor(stepProgress), steps.length - 1);
+      setCurrentStep(newStep);
+    }, 500);
 
     return () => {
-      timers.forEach(timer => clearTimeout(timer));
+      clearInterval(progressInterval);
     };
-  }, [isVisible, onComplete]);
+  }, [isVisible, estimatedDuration, steps.length]);
+
+  // Handle completion
+  useEffect(() => {
+    if (onComplete && !isVisible && isAnimating) {
+      setProgress(100);
+      setIsAnimating(false);
+      onComplete();
+    }
+  }, [isVisible, onComplete, isAnimating]);
 
   if (!isVisible) return null;
 
@@ -174,13 +216,17 @@ const WeeklyPlanLoadingScreen: React.FC<WeeklyPlanLoadingScreenProps> = ({
             <div 
               className="h-full bg-purple-500 rounded-full transition-all duration-1000 ease-out"
               style={{ 
-                width: `${(currentStep / steps.length) * 100}%` 
+                width: `${progress}%` 
               }}
             ></div>
           </div>
-          <p className="text-sm text-gray-600 mt-2">
-            {Math.round((currentStep / steps.length) * 100)}% complete
-          </p>
+          <div className="text-sm text-gray-600 mt-2 space-y-1">
+            <p>{Math.round(progress)}% complete</p>
+            <p>{Math.round(elapsedTime / 1000)}s elapsed</p>
+            {elapsedTime > estimatedDuration && (
+              <p className="text-orange-600">Taking a bit longer than usual...</p>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -1,6 +1,12 @@
 import axios from 'axios';
 import Cookies from 'js-cookie';
-import { GeneratePlanRequest, GenerateActivityRequest, SaveActivityResponseRequest } from '@/types/weekly-plan';
+import { 
+  CreatePlanRequest, 
+  UpdateDayActivitiesRequest, 
+  CompletePlanRequest,
+  PlanResponse,
+  DayResponse
+} from '@/types/weekly-plan';
 
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || '/api',
@@ -79,21 +85,9 @@ export const generateDayActivity = async (planId: number, dayOfWeek: number, act
   return response.data;
 };
 
-export const getPlan = async (studentId: number, options?: {
-  excludeChapters?: boolean;
-  excludeActivities?: boolean;
-  excludeStatus?: boolean;
-  excludeMetadata?: boolean;
-}) => {
-  const params = new URLSearchParams();
-  if (options?.excludeChapters) params.append('excludeChapters', 'true');
-  if (options?.excludeActivities) params.append('excludeActivities', 'true');
-  if (options?.excludeStatus) params.append('excludeStatus', 'true');
-  if (options?.excludeMetadata) params.append('excludeMetadata', 'true');
-  
-  const url = `/plans/${studentId}${params.toString() ? `?${params.toString()}` : ''}`;
-  const response = await api.get(url);
-  return response.data;
+// Legacy function for backward compatibility - now redirects to getPlanById
+export const getPlan = async (planId: number) => {
+  return await getPlanById(planId);
 };
 
 export const saveActivityResponse = async (activityId: number, response: any, markCompleted: boolean = true) => {
@@ -102,6 +96,37 @@ export const saveActivityResponse = async (activityId: number, response: any, ma
     markCompleted 
   });
   return apiResponse.data;
+};
+
+// New 5-Day Plan API functions
+export const createPlan = async (request: CreatePlanRequest): Promise<PlanResponse> => {
+  const response = await api.post('/plans', request);
+  return response.data;
+};
+
+export const getPlanById = async (planId: number): Promise<PlanResponse> => {
+  const response = await api.get(`/plans/${planId}`);
+  return response.data;
+};
+
+export const getPlanByStudentId = async (studentId: number): Promise<PlanResponse> => {
+  const response = await api.get(`/plans/student/${studentId}`);
+  return response.data;
+};
+
+export const deleteCurrentPlanForStudent = async (studentId: number) => {
+  const response = await api.delete(`/plans/student/${studentId}`);
+  return response.data;
+};
+
+export const updateDayActivities = async (planId: number, dayIndex: number, activities: any[]): Promise<DayResponse> => {
+  const response = await api.put(`/plans/${planId}/days/${dayIndex}`, { activities });
+  return response.data;
+};
+
+export const completePlan = async (planId: number): Promise<PlanResponse> => {
+  const response = await api.post(`/plans/${planId}/complete`);
+  return response.data;
 };
 
 // Error handling utilities
@@ -168,19 +193,64 @@ export const saveActivityResponseWithErrorHandling = async (activityId: number, 
   }
 };
 
-// Optimistic UI update utilities
-export const createOptimisticActivity = (planId: number, dayOfWeek: number, activityType: string) => {
+// New 5-Day Plan API functions with error handling
+export const createPlanWithErrorHandling = async (request: CreatePlanRequest): Promise<PlanResponse> => {
+  try {
+    return await createPlan(request);
+  } catch (error) {
+    throw handleApiError(error);
+  }
+};
+
+export const getPlanByIdWithErrorHandling = async (planId: number): Promise<PlanResponse> => {
+  try {
+    return await getPlanById(planId);
+  } catch (error) {
+    throw handleApiError(error);
+  }
+};
+
+export const updateDayActivitiesWithErrorHandling = async (planId: number, dayIndex: number, activities: any[]): Promise<DayResponse> => {
+  try {
+    return await updateDayActivities(planId, dayIndex, activities);
+  } catch (error) {
+    throw handleApiError(error);
+  }
+};
+
+export const completePlanWithErrorHandling = async (planId: number): Promise<PlanResponse> => {
+  try {
+    return await completePlan(planId);
+  } catch (error) {
+    throw handleApiError(error);
+  }
+};
+
+// Optimistic UI update utilities for 5-Day Plan structure
+export const createOptimisticDay = (planId: number, dayIndex: number) => {
   const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   return {
     id: tempId,
     planId,
-    dayOfWeek,
-    activityType,
-    content: {
-      loading: true,
-      message: 'Generating activity...'
-    },
-    completed: false,
+    dayIndex,
+    state: 'available' as const,
+    activities: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    isOptimistic: true
+  };
+};
+
+export const createOptimisticActivity = (dayId: number, type: string, prompt: string) => {
+  const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  return {
+    id: tempId,
+    dayId,
+    type,
+    prompt,
+    data: {},
+    response: null,
+    isValid: null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     isOptimistic: true
@@ -190,48 +260,78 @@ export const createOptimisticActivity = (planId: number, dayOfWeek: number, acti
 export const createOptimisticResponse = (activityId: number, response: any) => {
   return {
     id: activityId,
-    studentResponse: response,
-    completed: true,
-    completedAt: new Date().toISOString(),
+    response,
+    isValid: null,
     updatedAt: new Date().toISOString(),
     isOptimistic: true
   };
 };
 
-export const mergeOptimisticUpdate = (originalPlan: any, optimisticActivity: any) => {
-  if (!originalPlan.dailyActivities) {
-    originalPlan.dailyActivities = [];
+export const mergeOptimisticDayUpdate = (originalPlan: any, optimisticDay: any) => {
+  if (!originalPlan.days) {
+    originalPlan.days = [];
   }
   
-  // Remove any existing optimistic activity for this day
-  const filteredActivities = originalPlan.dailyActivities.filter(
-    (activity: any) => !(activity.isOptimistic && activity.dayOfWeek === optimisticActivity.dayOfWeek)
+  // Remove any existing optimistic day for this day index
+  const filteredDays = originalPlan.days.filter(
+    (day: any) => !(day.isOptimistic && day.dayIndex === optimisticDay.dayIndex)
   );
   
   return {
     ...originalPlan,
-    dailyActivities: [...filteredActivities, optimisticActivity]
+    days: [...filteredDays, optimisticDay]
   };
 };
 
-export const mergeOptimisticResponse = (originalPlan: any, optimisticResponse: any) => {
-  if (!originalPlan.dailyActivities) {
+export const mergeOptimisticActivityUpdate = (originalPlan: any, optimisticActivity: any) => {
+  if (!originalPlan.days) {
     return originalPlan;
   }
   
-  const updatedActivities = originalPlan.dailyActivities.map((activity: any) => {
-    if (activity.id === optimisticResponse.id) {
+  const updatedDays = originalPlan.days.map((day: any) => {
+    if (day.id === optimisticActivity.dayId) {
+      const updatedActivities = day.activities.filter(
+        (activity: any) => !(activity.isOptimistic && activity.id === optimisticActivity.id)
+      );
       return {
-        ...activity,
-        ...optimisticResponse
+        ...day,
+        activities: [...updatedActivities, optimisticActivity]
       };
     }
-    return activity;
+    return day;
   });
   
   return {
     ...originalPlan,
-    dailyActivities: updatedActivities
+    days: updatedDays
+  };
+};
+
+export const mergeOptimisticResponse = (originalPlan: any, optimisticResponse: any) => {
+  if (!originalPlan.days) {
+    return originalPlan;
+  }
+  
+  const updatedDays = originalPlan.days.map((day: any) => {
+    const updatedActivities = day.activities.map((activity: any) => {
+      if (activity.id === optimisticResponse.id) {
+        return {
+          ...activity,
+          ...optimisticResponse
+        };
+      }
+      return activity;
+    });
+    
+    return {
+      ...day,
+      activities: updatedActivities
+    };
+  });
+  
+  return {
+    ...originalPlan,
+    days: updatedDays
   };
 };
 

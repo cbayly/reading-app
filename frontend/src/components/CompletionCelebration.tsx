@@ -5,13 +5,15 @@ interface CompletionCelebrationProps {
   dayNumber: number;
   activityType: string;
   onClose: () => void;
+  onContinue?: () => void; // Optional navigation function
 }
 
 const CompletionCelebration: React.FC<CompletionCelebrationProps> = ({
   isVisible,
   dayNumber,
   activityType,
-  onClose
+  onClose,
+  onContinue
 }) => {
   const [showConfetti, setShowConfetti] = useState(false);
 
@@ -120,7 +122,7 @@ const CompletionCelebration: React.FC<CompletionCelebrationProps> = ({
           </div>
 
           <button
-            onClick={onClose}
+            onClick={onContinue || onClose}
             className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 px-6 rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105"
           >
             Continue Reading Journey

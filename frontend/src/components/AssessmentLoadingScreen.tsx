@@ -4,15 +4,20 @@ interface AssessmentLoadingScreenProps {
   studentName: string;
   isVisible: boolean;
   onComplete?: () => void;
+  estimatedDuration?: number; // Estimated duration in milliseconds
 }
 
 const AssessmentLoadingScreen: React.FC<AssessmentLoadingScreenProps> = ({
   studentName,
   isVisible,
-  onComplete
+  onComplete,
+  estimatedDuration = 45000 // Default 45 seconds based on observed times
 }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [startTime, setStartTime] = useState<number | null>(null);
+  const [progress, setProgress] = useState(0);
+  const [elapsedTime, setElapsedTime] = useState(0);
 
   // All possible loading messages
   const allLoadingMessages = [
@@ -35,53 +40,70 @@ const AssessmentLoadingScreen: React.FC<AssessmentLoadingScreenProps> = ({
     "Charging the rocket boosters for your reading journey…",
     "Checking the treasure map for hidden words…",
     "Calibrating the adventure compass…",
-    "Gathering clues for the mystery ahead…"
+    "Gathering clues for the mystery ahead…",
+    "Consulting with the AI wizards…",
+    "Brewing the perfect reading potion…",
+    "Summoning the question crafting spirits…",
+    "Weaving the story threads together…",
+    "Polishing the comprehension gems…",
+    "Fine-tuning the vocabulary magic…",
+    "Ensuring every word is just right…",
+    "Adding the final sparkles of learning…"
   ];
 
   // Function to shuffle array and get random items
   const getRandomSteps = () => {
     const shuffled = [...allLoadingMessages].sort(() => 0.5 - Math.random());
-    return shuffled.slice(0, 4);
+    // Get more steps for longer estimated duration
+    const stepCount = Math.max(6, Math.min(12, Math.ceil(estimatedDuration / 5000)));
+    return shuffled.slice(0, stepCount);
   };
 
   // Use useMemo to ensure steps are only generated once per loading session
-  const steps = useMemo(() => getRandomSteps(), []);
+  const steps = useMemo(() => getRandomSteps(), [estimatedDuration]);
 
   useEffect(() => {
     if (!isVisible) {
       setCurrentStep(0);
       setIsAnimating(false);
+      setProgress(0);
+      setStartTime(null);
+      setElapsedTime(0);
       return;
     }
 
     setIsAnimating(true);
+    const currentStartTime = Date.now();
+    setStartTime(currentStartTime);
+    setProgress(0);
+    setElapsedTime(0);
     
-    // Animate through each step with delays
-    const stepDelays = [1000, 2000, 3000, 4000]; // 1s, 2s, 3s, 4s
-    
-    const timers = stepDelays.map((delay, index) => 
-      setTimeout(() => {
-        // Check if component is still mounted and visible
-        if (isVisible) {
-          setCurrentStep(index + 1);
-        }
-      }, delay)
-    );
-
-    // Complete after all steps
-    const completeTimer = setTimeout(() => {
-      // Check if component is still mounted and visible
-      if (isVisible) {
-        setIsAnimating(false);
-        onComplete?.();
-      }
-    }, 5000); // 5 seconds total
+    // Progress update interval (every 500ms for smooth progress bar)
+    const progressInterval = setInterval(() => {
+      const elapsed = Date.now() - currentStartTime;
+      setElapsedTime(elapsed);
+      const newProgress = Math.min((elapsed / estimatedDuration) * 100, 95); // Cap at 95% until complete
+      setProgress(newProgress);
+      
+      // Update current step based on progress
+      const stepProgress = (elapsed / estimatedDuration) * steps.length;
+      const newStep = Math.min(Math.floor(stepProgress), steps.length - 1);
+      setCurrentStep(newStep);
+    }, 500);
 
     return () => {
-      timers.forEach(timer => clearTimeout(timer));
-      clearTimeout(completeTimer);
+      clearInterval(progressInterval);
     };
-  }, [isVisible, onComplete]);
+  }, [isVisible, estimatedDuration, steps.length]);
+
+  // Handle completion
+  useEffect(() => {
+    if (onComplete && !isVisible && isAnimating) {
+      setProgress(100);
+      setIsAnimating(false);
+      onComplete();
+    }
+  }, [isVisible, onComplete, isAnimating]);
 
   if (!isVisible) return null;
 
@@ -137,22 +159,22 @@ const AssessmentLoadingScreen: React.FC<AssessmentLoadingScreenProps> = ({
         </div>
 
         {/* Animated Checklist */}
-        <div className="space-y-4">
+        <div className="space-y-4 max-h-48 overflow-y-auto">
           {steps.map((step, index) => (
             <div
               key={index}
               className={`flex items-center space-x-3 transition-all duration-500 ${
-                index < currentStep 
+                index <= currentStep 
                   ? 'opacity-100 transform translate-x-0' 
                   : 'opacity-50 transform translate-x-4'
               }`}
             >
               <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-all duration-300 ${
-                index < currentStep 
+                index <= currentStep 
                   ? 'bg-green-500 scale-100' 
                   : 'bg-gray-300 scale-75'
               }`}>
-                {index < currentStep && (
+                {index <= currentStep && (
                   <svg 
                     className="w-4 h-4 text-white" 
                     fill="currentColor" 
@@ -167,7 +189,7 @@ const AssessmentLoadingScreen: React.FC<AssessmentLoadingScreenProps> = ({
                 )}
               </div>
               <span className={`text-gray-700 transition-all duration-300 ${
-                index < currentStep ? 'font-medium' : 'font-normal'
+                index <= currentStep ? 'font-medium' : 'font-normal'
               }`}>
                 {step}
               </span>
@@ -181,12 +203,25 @@ const AssessmentLoadingScreen: React.FC<AssessmentLoadingScreenProps> = ({
             <div 
               className="h-full bg-green-500 rounded-full transition-all duration-1000 ease-out"
               style={{ 
-                width: `${(currentStep / steps.length) * 100}%` 
+                width: `${progress}%` 
               }}
             ></div>
           </div>
           <p className="text-sm text-gray-600 mt-2">
-            {Math.round((currentStep / steps.length) * 100)}% complete
+            {Math.round(progress)}% complete
+          </p>
+          <p className="text-xs text-gray-500 mt-1">
+            This usually takes about {Math.round(estimatedDuration / 1000)} seconds
+            {elapsedTime > 0 && (
+              <span className="ml-2">
+                • {Math.round(elapsedTime / 1000)}s elapsed
+                {elapsedTime > estimatedDuration && (
+                  <span className="text-orange-600 font-medium">
+                    • Taking a bit longer than usual
+                  </span>
+                )}
+              </span>
+            )}
           </p>
         </div>
       </div>

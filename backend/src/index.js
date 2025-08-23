@@ -6,6 +6,7 @@ import authRoutes from '../routes/auth.js';
 import studentRoutes from '../routes/students.js';
 import assessmentRoutes from '../routes/assessments.js';
 import planRoutes from '../routes/plans.js';
+import plan3Routes from '../routes/plan3.js';
 import { authenticate } from '../middleware/auth.js';
 
 // Load environment variables from .env file
@@ -42,6 +43,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/students', authenticate, studentRoutes);
 app.use('/api/assessments', authenticate, assessmentRoutes);
 app.use('/api/plans', authenticate, planRoutes);
+app.use('/api/plan3', authenticate, plan3Routes);
 
 const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => {

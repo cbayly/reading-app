@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Cookies from 'js-cookie';
 import jwt from 'jsonwebtoken';
-import api from './api';
+import api from './api.ts';
 import { AuthResponse, Parent } from '../types/auth';
 
 export async function signUp(name: string, email: string, password: string): Promise<Parent> {
