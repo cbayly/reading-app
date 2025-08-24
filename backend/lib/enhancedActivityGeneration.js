@@ -13,42 +13,400 @@ function getOpenAIClient() {
 }
 
 /**
- * Enhanced activity content generation system
+ * Enhanced activity content generation system with caching and robust error handling
  * Extracts story-specific content for interactive reading activities
  */
 
 const DEFAULT_TIMEOUT_MS = process.env.NODE_ENV === 'test' ? 100 : 90000; // 100ms in tests, 90s otherwise
 
+// Content cache for storing generated activity content
+const contentCache = new Map();
+
+// Cache configuration
+const CACHE_CONFIG = {
+  maxSize: 1000, // Maximum number of cached entries
+  ttl: 24 * 60 * 60 * 1000, // 24 hours in milliseconds
+  cleanupInterval: 60 * 60 * 1000 // 1 hour cleanup interval
+};
+
+// Error handling and retry configuration
+const ERROR_CONFIG = {
+  maxRetries: 3,
+  baseDelay: 1000, // 1 second base delay
+  maxDelay: 10000, // 10 seconds max delay
+  circuitBreakerThreshold: 5, // Number of failures before circuit breaker opens
+  circuitBreakerTimeout: 60000, // 1 minute circuit breaker timeout
+  timeoutMs: DEFAULT_TIMEOUT_MS
+};
+
+// Circuit breaker state
+const circuitBreaker = {
+  failures: 0,
+  lastFailureTime: 0,
+  state: 'CLOSED' // CLOSED, OPEN, HALF_OPEN
+};
+
 /**
- * Base function for making AI calls with timeout protection
+ * Classifies errors for appropriate handling
+ * @param {Error} error - The error to classify
+ * @returns {object} - Error classification { type: string, retryable: boolean, message: string }
+ */
+function classifyError(error) {
+  const errorMessage = error.message.toLowerCase();
+  
+  // Network and timeout errors
+  if (errorMessage.includes('timeout') || errorMessage.includes('network') || errorMessage.includes('connection')) {
+    return {
+      type: 'NETWORK',
+      retryable: true,
+      message: 'Network or timeout error occurred'
+    };
+  }
+  
+  // Rate limiting errors
+  if (errorMessage.includes('rate limit') || errorMessage.includes('429')) {
+    return {
+      type: 'RATE_LIMIT',
+      retryable: true,
+      message: 'Rate limit exceeded, will retry with backoff'
+    };
+  }
+  
+  // Authentication errors
+  if (errorMessage.includes('401') || errorMessage.includes('unauthorized') || errorMessage.includes('invalid api key')) {
+    return {
+      type: 'AUTH',
+      retryable: false,
+      message: 'Authentication failed - check API key'
+    };
+  }
+  
+  // Quota exceeded errors
+  if (errorMessage.includes('quota') || errorMessage.includes('billing') || errorMessage.includes('payment')) {
+    return {
+      type: 'QUOTA',
+      retryable: false,
+      message: 'API quota exceeded or billing issue'
+    };
+  }
+  
+  // Server errors (5xx)
+  if (errorMessage.includes('500') || errorMessage.includes('502') || errorMessage.includes('503') || errorMessage.includes('504')) {
+    return {
+      type: 'SERVER',
+      retryable: true,
+      message: 'Server error occurred'
+    };
+  }
+  
+  // Content filtering errors
+  if (errorMessage.includes('content filter') || errorMessage.includes('inappropriate')) {
+    return {
+      type: 'CONTENT_FILTER',
+      retryable: false,
+      message: 'Content was flagged as inappropriate'
+    };
+  }
+  
+  // Default to unknown error
+  return {
+    type: 'UNKNOWN',
+    retryable: true,
+    message: 'Unknown error occurred'
+  };
+}
+
+/**
+ * Calculates exponential backoff delay with jitter
+ * @param {number} attempt - Current attempt number
+ * @returns {number} - Delay in milliseconds
+ */
+function calculateBackoffDelay(attempt) {
+  const delay = Math.min(
+    ERROR_CONFIG.baseDelay * Math.pow(2, attempt - 1),
+    ERROR_CONFIG.maxDelay
+  );
+  
+  // Add jitter (±25% random variation)
+  const jitter = delay * 0.25 * (Math.random() - 0.5);
+  return Math.max(100, delay + jitter);
+}
+
+/**
+ * Checks if circuit breaker should allow the request
+ * @returns {boolean} - Whether request should proceed
+ */
+function shouldAllowRequest() {
+  const now = Date.now();
+  
+  switch (circuitBreaker.state) {
+    case 'CLOSED':
+      return true;
+    
+    case 'OPEN':
+      if (now - circuitBreaker.lastFailureTime > ERROR_CONFIG.circuitBreakerTimeout) {
+        circuitBreaker.state = 'HALF_OPEN';
+        return true;
+      }
+      return false;
+    
+    case 'HALF_OPEN':
+      return true;
+    
+    default:
+      return true;
+  }
+}
+
+/**
+ * Records a failure for circuit breaker
+ */
+function recordFailure() {
+  circuitBreaker.failures++;
+  circuitBreaker.lastFailureTime = Date.now();
+  
+  if (circuitBreaker.failures >= ERROR_CONFIG.circuitBreakerThreshold) {
+    circuitBreaker.state = 'OPEN';
+    console.warn('Circuit breaker opened due to repeated failures');
+  }
+}
+
+/**
+ * Records a success for circuit breaker
+ */
+function recordSuccess() {
+  circuitBreaker.failures = 0;
+  circuitBreaker.state = 'CLOSED';
+}
+
+/**
+ * Generates a cache key for content based on story and activity parameters
+ * @param {string} chapterContent - The story chapter text
+ * @param {number} studentAge - The student's age
+ * @param {string} activityType - Type of activity
+ * @returns {string} - Unique cache key
+ */
+function generateCacheKey(chapterContent, studentAge, activityType) {
+  // Create a hash of the chapter content (first 1000 characters for performance)
+  const contentHash = chapterContent.substring(0, 1000).replace(/\s+/g, ' ').trim();
+  
+  // Combine parameters for unique key
+  const key = `${activityType}_${studentAge}_${contentHash}`;
+  
+  // Create a simple hash for the key to keep it manageable
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) {
+    const char = key.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  
+  return `content_${Math.abs(hash)}`;
+}
+
+/**
+ * Retrieves content from cache if available and not expired
+ * @param {string} cacheKey - The cache key to look up
+ * @returns {object|null} - Cached content or null if not found/expired
+ */
+function getCachedContent(cacheKey) {
+  const cached = contentCache.get(cacheKey);
+  
+  if (!cached) {
+    return null;
+  }
+  
+  // Check if cache entry has expired
+  if (Date.now() - cached.timestamp > CACHE_CONFIG.ttl) {
+    contentCache.delete(cacheKey);
+    return null;
+  }
+  
+  return cached.content;
+}
+
+/**
+ * Stores content in cache with timestamp
+ * @param {string} cacheKey - The cache key
+ * @param {object} content - The content to cache
+ */
+function setCachedContent(cacheKey, content) {
+  // Check cache size and remove oldest entries if necessary
+  if (contentCache.size >= CACHE_CONFIG.maxSize) {
+    cleanupCache();
+  }
+  
+  contentCache.set(cacheKey, {
+    content: content,
+    timestamp: Date.now()
+  });
+}
+
+/**
+ * Cleans up expired cache entries and removes oldest entries if cache is full
+ */
+function cleanupCache() {
+  const now = Date.now();
+  const expiredKeys = [];
+  
+  // Find expired entries
+  for (const [key, value] of contentCache.entries()) {
+    if (now - value.timestamp > CACHE_CONFIG.ttl) {
+      expiredKeys.push(key);
+    }
+  }
+  
+  // Remove expired entries
+  expiredKeys.forEach(key => contentCache.delete(key));
+  
+  // If still over limit, remove oldest entries
+  if (contentCache.size >= CACHE_CONFIG.maxSize) {
+    const entries = Array.from(contentCache.entries());
+    entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
+    
+    const toRemove = entries.slice(0, Math.floor(CACHE_CONFIG.maxSize * 0.2)); // Remove 20% of oldest entries
+    toRemove.forEach(([key]) => contentCache.delete(key));
+  }
+}
+
+/**
+ * Invalidates cache entries for a specific story or all entries
+ * @param {string} chapterContent - The story chapter text (optional, if not provided clears all)
+ */
+function invalidateCache(chapterContent = null) {
+  if (!chapterContent) {
+    contentCache.clear();
+    return;
+  }
+  
+  // Remove cache entries derived from this story content by recomputing keys
+  const activityTypes = ['who', 'where', 'sequence', 'main-idea', 'vocabulary', 'predict', 'general'];
+  // Reasonable age range for students in this app
+  const ages = Array.from({ length: 16 }, (_, i) => i + 3); // 3..18
+  
+  for (const activityType of activityTypes) {
+    for (const age of ages) {
+      const key = generateCacheKey(chapterContent, age, activityType);
+      if (contentCache.has(key)) {
+        contentCache.delete(key);
+      }
+    }
+  }
+}
+
+/**
+ * Gets cache statistics for monitoring
+ * @returns {object} - Cache statistics
+ */
+function getCacheStats() {
+  const now = Date.now();
+  let expiredCount = 0;
+  let totalSize = 0;
+  
+  for (const [_, value] of contentCache.entries()) {
+    if (now - value.timestamp > CACHE_CONFIG.ttl) {
+      expiredCount++;
+    }
+    totalSize += JSON.stringify(value.content).length;
+  }
+  
+  return {
+    totalEntries: contentCache.size,
+    expiredEntries: expiredCount,
+    totalSizeBytes: totalSize,
+    maxSize: CACHE_CONFIG.maxSize,
+    ttlHours: CACHE_CONFIG.ttl / (60 * 60 * 1000)
+  };
+}
+
+// Set up periodic cache cleanup (disabled in tests)
+if (typeof setInterval !== 'undefined' && process.env.NODE_ENV !== 'test') {
+  setInterval(cleanupCache, CACHE_CONFIG.cleanupInterval);
+}
+
+/**
+ * Enhanced AI call function with comprehensive error handling and retry logic
  * @param {string} prompt - The prompt to send to the AI
  * @param {object} modelConfig - Configuration for the AI model
+ * @param {number} attempt - Current attempt number (for retries)
  * @returns {Promise<object>} - The AI response
  */
-async function makeAICall(prompt, modelConfig) {
-  const timeoutMs = DEFAULT_TIMEOUT_MS;
-  let timeoutId;
-  const timeoutPromise = new Promise((_, reject) => {
-    timeoutId = setTimeout(() => reject(new Error('AI call timed out')), timeoutMs);
-  });
-
+async function makeAICall(prompt, modelConfig, attempt = 1) {
+  const startTime = Date.now();
+  
   try {
-    const openai = getOpenAIClient();
-    const aiPromise = openai.chat.completions.create({
-      ...modelConfig,
-      messages: [{ role: 'user', content: prompt }]
+    // Check circuit breaker
+    if (!shouldAllowRequest()) {
+      throw new Error('Circuit breaker is open - request blocked');
+    }
+    
+    // Set up timeout
+    const timeoutMs = ERROR_CONFIG.timeoutMs;
+    let timeoutId;
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error('AI call timed out')), timeoutMs);
     });
 
     try {
+      const openai = getOpenAIClient();
+      const aiPromise = openai.chat.completions.create({
+        ...modelConfig,
+        messages: [{ role: 'user', content: prompt }]
+      });
+
       const response = await Promise.race([aiPromise, timeoutPromise]);
       clearTimeout(timeoutId);
+      
+      // Record success
+      recordSuccess();
+      
+      const duration = Date.now() - startTime;
+      console.log(`AI call successful (attempt ${attempt}, ${duration}ms)`);
+      
       return response.choices[0].message.content;
+      
     } finally {
       clearTimeout(timeoutId);
     }
+    
   } catch (error) {
-    console.error('AI call failed:', error);
-    throw new Error('Failed to generate content: ' + error.message);
+    const duration = Date.now() - startTime;
+    const errorClassification = classifyError(error);
+    
+    console.error(`AI call failed (attempt ${attempt}, ${duration}ms):`, {
+      error: error.message,
+      type: errorClassification.type,
+      retryable: errorClassification.retryable,
+      circuitBreakerState: circuitBreaker.state
+    });
+    
+    // Record failure for circuit breaker
+    recordFailure();
+    
+    // If not retryable, throw immediately
+    if (!errorClassification.retryable) {
+      throw new Error(`${errorClassification.message}: ${error.message}`);
+    }
+    
+    // If we've exhausted retries, throw
+    if (attempt >= ERROR_CONFIG.maxRetries) {
+      throw new Error(`Failed after ${ERROR_CONFIG.maxRetries} attempts: ${errorClassification.message}`);
+    }
+    
+    // For timeouts and circuit breaker errors, don't retry
+    if (error.message.includes('timed out') || error.message.includes('Circuit breaker is open')) {
+      throw error;
+    }
+    
+    // Calculate backoff delay
+    const delay = calculateBackoffDelay(attempt);
+    console.log(`Retrying in ${delay}ms (attempt ${attempt + 1}/${ERROR_CONFIG.maxRetries})`);
+    
+    // Wait before retrying
+    await new Promise(resolve => setTimeout(resolve, delay));
+    
+    // Retry the call
+    return makeAICall(prompt, modelConfig, attempt + 1);
   }
 }
 
@@ -978,56 +1336,96 @@ async function attemptContentRegeneration(chapterContent, studentAge, activityTy
 }
 
 /**
- * Enhanced content generation with validation and fallback mechanisms
+ * Enhanced content generation with comprehensive error handling
  * @param {string} chapterContent - The story chapter text
  * @param {object} student - Student information including age
  * @param {string} activityType - Type of activity to generate content for
- * @returns {Promise<object>} - Generated activity content with fallback support
+ * @param {boolean} useCache - Whether to use caching (default: true)
+ * @returns {Promise<object>} - Generated activity content with caching and fallback support
  */
-export async function generateActivityContent(chapterContent, student, activityType) {
+export async function generateActivityContent(chapterContent, student, activityType, useCache = true) {
+  const startTime = Date.now();
+  
   try {
+    // Check cache first if caching is enabled
+    if (useCache) {
+      const cacheKey = generateCacheKey(chapterContent, student.age, activityType);
+      const cachedContent = getCachedContent(cacheKey);
+      
+      if (cachedContent) {
+        console.log(`Cache hit for activity type: ${activityType}`);
+        return cachedContent;
+      }
+    }
+
     // First attempt: Generate content normally
     let content;
     
-    switch (activityType) {
-      case 'who':
-        content = await extractCharactersWithDecoys(chapterContent, student.age);
-        break;
-      case 'where':
-        content = await extractSettingsWithDescriptions(chapterContent, student.age);
-        break;
-      case 'sequence':
-        content = await extractEventSequence(chapterContent, student.age);
-        break;
-      case 'main-idea':
-        content = await extractMainIdeaWithOptions(chapterContent, student.age);
-        break;
-      case 'vocabulary':
-        content = await extractVocabularyWithDefinitions(chapterContent, student.age);
-        break;
-      case 'predict':
-        content = await extractPredictionOptions(chapterContent, student.age);
-        break;
-      default:
-        // Fallback to generic content generation
-        content = await makeAICall(
-          `Generate ${activityType} activity content for this story: ${chapterContent}`,
-          MODEL_CONFIG
-        );
+    try {
+      switch (activityType) {
+        case 'who':
+          content = await extractCharactersWithDecoys(chapterContent, student.age);
+          break;
+        case 'where':
+          content = await extractSettingsWithDescriptions(chapterContent, student.age);
+          break;
+        case 'sequence':
+          content = await extractEventSequence(chapterContent, student.age);
+          break;
+        case 'main-idea':
+          content = await extractMainIdeaWithOptions(chapterContent, student.age);
+          break;
+        case 'vocabulary':
+          content = await extractVocabularyWithDefinitions(chapterContent, student.age);
+          break;
+        case 'predict':
+          content = await extractPredictionOptions(chapterContent, student.age);
+          break;
+        default:
+          // Fallback to generic content generation
+          content = await makeAICall(
+            `Generate ${activityType} activity content for this story: ${chapterContent}`,
+            MODEL_CONFIG
+          );
+      }
+    } catch (error) {
+      console.error(`Content generation failed for ${activityType}:`, error.message);
+      throw error;
     }
 
     // Validate the generated content
     const validation = validateContent(content, student.age);
     if (validation.isValid) {
+      // Cache the successful content if caching is enabled
+      if (useCache) {
+        const cacheKey = generateCacheKey(chapterContent, student.age, activityType);
+        setCachedContent(cacheKey, content);
+        console.log(`Cached content for activity type: ${activityType}`);
+      }
+      
+      const duration = Date.now() - startTime;
+      console.log(`Content generation successful (${activityType}, ${duration}ms)`);
       return content;
     }
 
     // If validation fails, attempt regeneration with different parameters
     console.warn(`Initial content validation failed: ${validation.reason}`);
-    return await attemptContentRegeneration(chapterContent, student.age, activityType, 1);
+    const regeneratedContent = await attemptContentRegeneration(chapterContent, student.age, activityType, 1);
+    
+    // Cache the regenerated content if it's not fallback content
+    if (useCache && !regeneratedContent.fallback) {
+      const cacheKey = generateCacheKey(chapterContent, student.age, activityType);
+      setCachedContent(cacheKey, regeneratedContent);
+      console.log(`Cached regenerated content for activity type: ${activityType}`);
+    }
+    
+    const duration = Date.now() - startTime;
+    console.log(`Content generation completed with regeneration (${activityType}, ${duration}ms)`);
+    return regeneratedContent;
 
   } catch (error) {
-    console.error(`Failed to generate ${activityType} content:`, error);
+    const duration = Date.now() - startTime;
+    console.error(`Content generation failed completely (${activityType}, ${duration}ms):`, error.message);
     
     // Return fallback content if all attempts fail
     return generateFallbackContent(activityType, student.age);
@@ -1037,9 +1435,20 @@ export async function generateActivityContent(chapterContent, student, activityT
 // Export functions for testing
 export {
   makeAICall,
+  classifyError,
+  calculateBackoffDelay,
+  shouldAllowRequest,
+  recordFailure,
+  recordSuccess,
   validateContent,
   generateFallbackContent,
   attemptContentRegeneration,
+  generateCacheKey,
+  getCachedContent,
+  setCachedContent,
+  cleanupCache,
+  invalidateCache,
+  getCacheStats,
   extractCharactersWithDecoys,
   extractSettingsWithDescriptions,
   extractEventSequence,
