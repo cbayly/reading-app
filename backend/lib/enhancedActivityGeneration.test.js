@@ -1231,4 +1231,467 @@ describe('Enhanced Activity Generation', () => {
       // The core error handling functionality is thoroughly tested above
     });
   });
+
+  describe('Individual Content Extraction Functions', () => {
+    const mockChapter = 'The brave knight stood at the castle gates, facing the fierce dragon. His sword was broken, and he knew he needed help to save the kingdom. The villagers watched from behind the castle walls, hoping for a miracle.';
+
+    beforeEach(() => {
+      // Reset circuit breaker state before each test
+      recordSuccess();
+    });
+
+    describe('extractCharactersWithDecoys', () => {
+      it('should extract characters and generate decoys successfully', async () => {
+        const mockResponse = {
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                realCharacters: [
+                  {
+                    name: 'Sir Arthur',
+                    role: 'protagonist',
+                    description: 'A brave knight who protects the kingdom.'
+                  },
+                  {
+                    name: 'Dragon',
+                    role: 'antagonist',
+                    description: 'A fierce dragon threatening the kingdom.'
+                  },
+                  {
+                    name: 'Villagers',
+                    role: 'supporting',
+                    description: 'The people of the kingdom who need protection.'
+                  }
+                ],
+                decoyCharacters: [
+                  {
+                    name: 'Wizard Merlin',
+                    role: 'helper',
+                    description: 'A wise wizard who could help the knight.'
+                  },
+                  {
+                    name: 'Queen Guinevere',
+                    role: 'noble',
+                    description: 'The queen of the kingdom.'
+                  }
+                ]
+              })
+            }
+          }]
+        };
+
+        mockCreate.mockResolvedValue(mockResponse);
+
+        const result = await extractCharactersWithDecoys(mockChapter, 10);
+        
+        expect(result.realCharacters).toHaveLength(3);
+        expect(result.decoyCharacters).toHaveLength(2);
+        expect(result.realCharacters[0].name).toBe('Sir Arthur');
+        expect(result.realCharacters[0].role).toBe('protagonist');
+        expect(result.decoyCharacters[0].name).toBe('Wizard Merlin');
+      });
+
+      it('should handle AI call failures gracefully', async () => {
+        mockCreate.mockRejectedValue(new Error('API Error'));
+
+        await expect(extractCharactersWithDecoys(mockChapter, 10))
+          .rejects
+          .toThrow('Failed after 3 attempts');
+      });
+
+      it('should validate character count requirements', async () => {
+        const mockResponse = {
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                realCharacters: [
+                  {
+                    name: 'Single Character',
+                    role: 'protagonist',
+                    description: 'Only one character.'
+                  }
+                ],
+                decoyCharacters: []
+              })
+            }
+          }]
+        };
+
+        mockCreate.mockResolvedValue(mockResponse);
+
+        await expect(extractCharactersWithDecoys(mockChapter, 10))
+          .rejects
+          .toThrow('Invalid number of real characters extracted');
+      });
+    });
+
+    describe('extractSettingsWithDescriptions', () => {
+      it('should extract settings and generate decoys successfully', async () => {
+        const mockResponse = {
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                realSettings: [
+                  {
+                    name: 'Castle Gates',
+                    description: 'The main entrance to the castle where the knight stands guard.'
+                  },
+                  {
+                    name: 'Kingdom',
+                    description: 'The entire realm that needs protection from the dragon.'
+                  },
+                  {
+                    name: 'Castle Walls',
+                    description: 'The defensive walls where villagers watch the battle.'
+                  }
+                ],
+                decoySettings: [
+                  {
+                    name: 'Enchanted Forest',
+                    description: 'A magical forest that could hide the dragon\'s lair.'
+                  },
+                  {
+                    name: 'Mountain Peak',
+                    description: 'A high mountain where the dragon might live.'
+                  }
+                ]
+              })
+            }
+          }]
+        };
+
+        mockCreate.mockResolvedValue(mockResponse);
+
+        const result = await extractSettingsWithDescriptions(mockChapter, 10);
+        
+        expect(result.realSettings).toHaveLength(3);
+        expect(result.decoySettings).toHaveLength(2);
+        expect(result.realSettings[0].name).toBe('Castle Gates');
+        expect(result.realSettings[0].description).toContain('entrance');
+      });
+
+      it('should handle validation failures', async () => {
+        const mockResponse = {
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                realSettings: [
+                  {
+                    name: 'Violent Setting',
+                    description: 'A dangerous and violent place with inappropriate content.'
+                  }
+                ],
+                decoySettings: []
+              })
+            }
+          }]
+        };
+
+        mockCreate.mockResolvedValue(mockResponse);
+
+        await expect(extractSettingsWithDescriptions(mockChapter, 10))
+          .rejects
+          .toThrow('Setting content validation failed');
+      });
+    });
+
+    describe('extractEventSequence', () => {
+      it('should extract event sequence successfully', async () => {
+        const mockResponse = {
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                orderedEvents: [
+                  { id: 1, text: 'The knight stands at the castle gates.' },
+                  { id: 2, text: 'The dragon appears and threatens the kingdom.' },
+                  { id: 3, text: 'The knight\'s sword breaks in battle.' },
+                  { id: 4, text: 'The villagers watch from the castle walls.' },
+                  { id: 5, text: 'The knight realizes he needs help to save the kingdom.' }
+                ]
+              })
+            }
+          }]
+        };
+
+        mockCreate.mockResolvedValue(mockResponse);
+
+        const result = await extractEventSequence(mockChapter, 10);
+        
+        expect(result.orderedEvents).toHaveLength(5);
+        expect(result.shuffledEvents).toHaveLength(5);
+        expect(result.orderedEvents[0].id).toBe(1);
+        expect(result.orderedEvents[0].text).toContain('knight stands');
+      });
+
+      it('should validate event count requirements', async () => {
+        const mockResponse = {
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                orderedEvents: [
+                  { id: 1, text: 'First event.' },
+                  { id: 2, text: 'Second event.' },
+                  { id: 3, text: 'Third event.' }
+                ]
+              })
+            }
+          }]
+        };
+
+        mockCreate.mockResolvedValue(mockResponse);
+
+        await expect(extractEventSequence(mockChapter, 10))
+          .rejects
+          .toThrow('Invalid number of events extracted');
+      });
+    });
+
+    describe('extractMainIdeaWithOptions', () => {
+      it('should extract main idea with options successfully', async () => {
+        const mockResponse = {
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                question: 'What is the main idea of this story?',
+                options: [
+                  {
+                    id: 'A',
+                    text: 'A knight must protect his kingdom from a dragon.',
+                    isCorrect: true,
+                    feedback: 'This is correct because it captures the central conflict and purpose of the story.'
+                  },
+                  {
+                    id: 'B',
+                    text: 'Dragons are large creatures.',
+                    isCorrect: false,
+                    feedback: 'This is incorrect because it focuses on a general fact rather than the story\'s main idea.'
+                  },
+                  {
+                    id: 'C',
+                    text: 'Villagers like to watch battles.',
+                    isCorrect: false,
+                    feedback: 'This is incorrect because it focuses on a minor detail rather than the main idea.'
+                  },
+                  {
+                    id: 'D',
+                    text: 'Swords can break in battle.',
+                    isCorrect: false,
+                    feedback: 'This is incorrect because it focuses on a specific event rather than the main idea.'
+                  }
+                ]
+              })
+            }
+          }]
+        };
+
+        mockCreate.mockResolvedValue(mockResponse);
+
+        const result = await extractMainIdeaWithOptions(mockChapter, 10);
+        
+        expect(result.question).toBe('What is the main idea of this story?');
+        expect(result.options).toHaveLength(4);
+        expect(result.options[0].isCorrect).toBe(true);
+        expect(result.options[1].isCorrect).toBe(false);
+      });
+
+      it('should validate exactly one correct answer', async () => {
+        const mockResponse = {
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                question: 'What is the main idea?',
+                options: [
+                  {
+                    id: 'A',
+                    text: 'First option.',
+                    isCorrect: true,
+                    feedback: 'Correct.'
+                  },
+                  {
+                    id: 'B',
+                    text: 'Second option.',
+                    isCorrect: true,
+                    feedback: 'Also correct.'
+                  }
+                ]
+              })
+            }
+          }]
+        };
+
+        mockCreate.mockResolvedValue(mockResponse);
+
+        await expect(extractMainIdeaWithOptions(mockChapter, 10))
+          .rejects
+          .toThrow('Main idea must have exactly 4 options');
+      });
+    });
+
+    describe('extractVocabularyWithDefinitions', () => {
+      it('should extract vocabulary with definitions successfully', async () => {
+        const mockResponse = {
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                vocabularyWords: [
+                  {
+                    word: 'brave',
+                    definition: 'Showing courage and not being afraid to face difficult situations',
+                    context: 'The brave knight faced the dragon without fear.'
+                  },
+                  {
+                    word: 'fierce',
+                    definition: 'Strong and aggressive in nature',
+                    context: 'The fierce dragon threatened the kingdom.'
+                  },
+                  {
+                    word: 'kingdom',
+                    definition: 'A country or territory ruled by a king or queen',
+                    context: 'The knight protected the entire kingdom.'
+                  }
+                ],
+                decoyDefinitions: [
+                  {
+                    definition: 'A type of weapon used in battle',
+                    isUsed: false
+                  },
+                  {
+                    definition: 'A large building where people live',
+                    isUsed: false
+                  }
+                ]
+              })
+            }
+          }]
+        };
+
+        mockCreate.mockResolvedValue(mockResponse);
+
+        const result = await extractVocabularyWithDefinitions(mockChapter, 10);
+        
+        expect(result.vocabularyWords).toHaveLength(3);
+        expect(result.decoyDefinitions).toHaveLength(2);
+        expect(result.vocabularyWords[0].word).toBe('brave');
+        expect(result.vocabularyWords[0].definition).toContain('courage');
+      });
+
+      it('should validate vocabulary word count requirements', async () => {
+        const mockResponse = {
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                vocabularyWords: [
+                  {
+                    word: 'single',
+                    definition: 'Only one word.',
+                    context: 'Single context.'
+                  }
+                ],
+                decoyDefinitions: []
+              })
+            }
+          }]
+        };
+
+        mockCreate.mockResolvedValue(mockResponse);
+
+        await expect(extractVocabularyWithDefinitions(mockChapter, 10))
+          .rejects
+          .toThrow('Invalid number of vocabulary words extracted');
+      });
+    });
+
+    describe('extractPredictionOptions', () => {
+      it('should extract prediction options successfully', async () => {
+        const mockResponse = {
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                question: 'What do you think will happen next in the story?',
+                predictions: [
+                  {
+                    id: 'A',
+                    text: 'The knight will find a magical sword to help defeat the dragon.',
+                    plausibilityScore: 8,
+                    feedback: 'This is very plausible because the story shows the knight needs help.'
+                  },
+                  {
+                    id: 'B',
+                    text: 'The dragon will become friends with the knight.',
+                    plausibilityScore: 3,
+                    feedback: 'This is less likely because the story shows the dragon as a threat.'
+                  },
+                  {
+                    id: 'C',
+                    text: 'The villagers will build a wall around the castle.',
+                    plausibilityScore: 6,
+                    feedback: 'This is somewhat plausible as a defensive measure.'
+                  },
+                  {
+                    id: 'D',
+                    text: 'A wizard will appear to help the knight.',
+                    plausibilityScore: 7,
+                    feedback: 'This is quite plausible because wizards often help heroes.'
+                  }
+                ]
+              })
+            }
+          }]
+        };
+
+        mockCreate.mockResolvedValue(mockResponse);
+
+        const result = await extractPredictionOptions(mockChapter, 10);
+        
+        expect(result.question).toBe('What do you think will happen next in the story?');
+        expect(result.predictions).toHaveLength(4);
+        expect(result.predictions[0].plausibilityScore).toBe(8);
+        expect(result.predictions[1].plausibilityScore).toBe(3);
+      });
+
+      it('should validate plausibility score range', async () => {
+        const mockResponse = {
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                question: 'What will happen next?',
+                predictions: [
+                  {
+                    id: 'A',
+                    text: 'Something will happen.',
+                    plausibilityScore: 15, // Invalid score
+                    feedback: 'This is likely.'
+                  },
+                  {
+                    id: 'B',
+                    text: 'Another thing will happen.',
+                    plausibilityScore: 5,
+                    feedback: 'This is possible.'
+                  },
+                  {
+                    id: 'C',
+                    text: 'A third thing will happen.',
+                    plausibilityScore: 7,
+                    feedback: 'This could happen.'
+                  },
+                  {
+                    id: 'D',
+                    text: 'A fourth thing will happen.',
+                    plausibilityScore: 3,
+                    feedback: 'This might happen.'
+                  }
+                ]
+              })
+            }
+          }]
+        };
+
+        mockCreate.mockResolvedValue(mockResponse);
+
+        await expect(extractPredictionOptions(mockChapter, 10))
+          .rejects
+          .toThrow('invalid plausibility score (must be 1-10)');
+      });
+    });
+  });
 });
