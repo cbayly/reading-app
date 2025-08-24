@@ -2383,6 +2383,8 @@ router.get('/student/:studentId', authenticate, async (req, res) => {
   const { studentId } = req.params;
   const parentId = req.user.id;
 
+  console.log(`🔍 GET /api/plans/student/${studentId} - Request from parent ${parentId}`);
+
   try {
     // Verify the student belongs to the authenticated parent
     const student = await prisma.student.findFirst({
@@ -2390,8 +2392,12 @@ router.get('/student/:studentId', authenticate, async (req, res) => {
     });
 
     if (!student) {
+      console.log(`❌ Student ${studentId} not found for parent ${parentId}`);
       return res.status(404).json({ message: 'Student not found' });
     }
+
+    console.log(`✅ Found student: ${student.name} (ID: ${student.id})`);
+    console.log(`🔍 Attempting to find plan for student ${studentId}...`);
 
     // Get the most recent plan for the student
     const plan = await prisma.plan.findFirst({
@@ -2412,15 +2418,22 @@ router.get('/student/:studentId', authenticate, async (req, res) => {
     });
 
     if (!plan) {
+      console.log(`ℹ️  No plan found for student ${studentId}`);
       return res.status(404).json({ message: 'No plan found for this student' });
     }
 
+    console.log(`✅ Found plan: ${plan.id} for student ${studentId}`);
     res.status(200).json({
       plan: plan
     });
 
   } catch (error) {
-    console.error('Error fetching plan for student:', error);
+    console.error('❌ Error fetching plan for student:', error);
+    console.error('❌ Error details:', {
+      message: error.message,
+      code: error.code,
+      meta: error.meta
+    });
     ERROR_HANDLERS.handleRouteError(error, req, res, 'PLAN_FETCH_BY_STUDENT', {
       studentId: parseInt(studentId)
     });

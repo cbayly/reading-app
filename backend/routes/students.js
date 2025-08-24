@@ -23,6 +23,7 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const studentId = parseInt(req.params.id);
+    console.log(`🔍 GET /api/students/${studentId} - Request from parent ${req.user.id}`);
     
     // Verify the student belongs to the authenticated parent
     const student = await prisma.student.findFirst({
@@ -33,9 +34,11 @@ router.get('/:id', async (req, res) => {
     });
 
     if (!student) {
+      console.log(`❌ Student ${studentId} not found for parent ${req.user.id}`);
       return res.status(404).json({ message: 'Student not found' });
     }
 
+    console.log(`✅ Found student: ${student.name} (ID: ${student.id})`);
     res.json(student);
   } catch (err) {
     console.error("❌ Error fetching student:", err);

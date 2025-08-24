@@ -257,6 +257,12 @@ export async function generateStory(student, interest, genreCombination = null) 
   // Get model configuration early so it's available in catch block
   const modelConfig = getModelConfig(CONTENT_TYPES.STORY_CREATION);
   
+  // Add timeout protection
+  const timeoutMs = 90000; // 90 seconds
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error('AI generation timeout')), timeoutMs);
+  });
+  
   try {
     // Get the most recent assessment to determine reading level
     const mostRecentAssessment = await getMostRecentAssessment(student.id);
@@ -270,12 +276,37 @@ export async function generateStory(student, interest, genreCombination = null) 
     // Calculate student age
     const studentAge = new Date().getFullYear() - student.birthday.getFullYear();
     
-    // Get incorrect words from the most recent assessment
-    const incorrectWords = mostRecentAssessment?.studentAnswers ? 
-      Object.entries(mostRecentAssessment.studentAnswers)
-        .filter(([_, answer]) => answer !== mostRecentAssessment.questions[parseInt(_)].correctAnswer)
-        .map(([index, _]) => mostRecentAssessment.questions[parseInt(index)].text)
-        .join(', ') : '';
+    // Get incorrect words from the most recent assessment - simplified and robust
+    let incorrectWords = '';
+    try {
+      if (mostRecentAssessment && 
+          mostRecentAssessment.studentAnswers && 
+          mostRecentAssessment.studentAnswers.answers &&
+          mostRecentAssessment.questions &&
+          mostRecentAssessment.questions.questions &&
+          Array.isArray(mostRecentAssessment.questions.questions)) {
+        
+        const incorrectWordsList = [];
+        const questions = mostRecentAssessment.questions.questions;
+        const answers = mostRecentAssessment.studentAnswers.answers;
+        
+        for (const answer of answers) {
+          const question = questions.find(q => q.id === answer.questionId);
+          if (question && 
+              question.correctAnswer !== undefined && 
+              question.correctAnswer !== null && 
+              answer.answer !== question.correctAnswer &&
+              question.text) {
+            incorrectWordsList.push(question.text);
+          }
+        }
+        
+        incorrectWords = incorrectWordsList.join(', ');
+      }
+    } catch (error) {
+      console.warn('Error processing assessment data for incorrect words:', error);
+      incorrectWords = '';
+    }
     
     const storyPrompt = `
 You are an expert children's storyteller creating a 3-chapter story for a ${studentAge}-year-old student interested in ${interest}${genreCombination ? ` in a ${genreCombination} style` : ''}.
@@ -405,19 +436,22 @@ JSON STRUCTURE (copy exactly):
       }
     };
 
-    const result = await logAIRequestWithCapture({
-      contentType: CONTENT_TYPES.STORY_CREATION,
-      aiFunction,
-      modelConfig,
-      metadata: {
-        studentId: student.id,
-        studentName: student.name,
-        interest: interest,
-        genreCombination: genreCombination,
-        adjustedGradeLevel,
-        studentAge: new Date().getFullYear() - student.birthday.getFullYear()
-      }
-    });
+    const result = await Promise.race([
+      logAIRequestWithCapture({
+        contentType: CONTENT_TYPES.STORY_CREATION,
+        aiFunction,
+        modelConfig,
+        metadata: {
+          studentId: student.id,
+          studentName: student.name,
+          interest: interest,
+          genreCombination: genreCombination,
+          adjustedGradeLevel,
+          studentAge: new Date().getFullYear() - student.birthday.getFullYear()
+        }
+      }),
+      timeoutPromise
+    ]);
 
     // Handle different response formats based on API type
     let content;
@@ -2904,6 +2938,160 @@ export async function generateAssessment(student, modelOverride = null) {
     } else {
       // For other errors, provide detailed information
       throw new Error(`Failed to generate assessment with model ${modelConfig.model}: ${error.message}`);
+    }
+  }
+}
+
+/**
+ * Generate story-specific activity content by extracting characters and events
+ * @param {string} chapterContent - The story chapter content
+ * @param {object} student - Student information
+ * @param {string} activityType - Type of activity ('who', 'sequence', etc.)
+ * @returns {object} - Activity data with story-specific content
+ */
+export async function generateStoryActivityContent(chapterContent, student, activityType) {
+  try {
+    const modelConfig = getModelConfig(CONTENT_TYPES.DAILY_TASK_GENERATION);
+    
+    let prompt = '';
+    let expectedStructure = {};
+    
+    switch (activityType) {
+      case 'who':
+        prompt = `
+You are an expert children's reading specialist. 
+Based on the following story chapter, extract the main characters and create a character matching activity.
+
+Story Chapter:
+${chapterContent}
+
+Requirements:
+- Identify 3-4 main characters from the story
+- For each character, provide:
+  - A clear, memorable name
+  - A descriptive summary (2-3 sentences) that captures their role and personality
+- Make descriptions engaging and appropriate for a ${student.gradeLevel} grade student
+- Ensure descriptions are specific enough to match correctly but not too obvious
+
+Return the response as a valid JSON object with this structure:
+{
+  "characters": [
+    {
+      "id": "char1",
+      "name": "Character Name",
+      "description": "A detailed description of this character's role and personality in the story."
+    }
+  ]
+}`;
+        expectedStructure = {
+          characters: [
+            {
+              id: "char1",
+              name: "Example Character",
+              description: "Example description"
+            }
+          ]
+        };
+        break;
+        
+      case 'sequence':
+        prompt = `
+You are an expert children's reading specialist.
+Based on the following story chapter, extract the main events and create a sequencing activity.
+
+Story Chapter:
+${chapterContent}
+
+Requirements:
+- Identify 4-5 key events from the story in chronological order
+- Each event should be:
+  - Clear and specific
+  - Written in simple language appropriate for grade ${student.gradeLevel}
+  - 1-2 sentences long
+  - Easy to understand out of context
+- Events should follow the story's natural progression
+- Avoid events that are too similar or could be confused
+
+Return the response as a valid JSON object with this structure:
+{
+  "events": [
+    {
+      "id": "event1",
+      "text": "Description of the first event that happens in the story."
+    }
+  ],
+  "correctOrder": ["event1", "event2", "event3", "event4"]
+}`;
+        expectedStructure = {
+          events: [
+            {
+              id: "event1",
+              text: "Example event description"
+            }
+          ],
+          correctOrder: ["event1"]
+        };
+        break;
+        
+      default:
+        return null;
+    }
+
+    const aiFunction = async () => {
+      return await openai.chat.completions.create({
+        model: modelConfig.model,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: getTemperatureForModel(modelConfig.model, modelConfig.temperature),
+      });
+    };
+
+    const result = await logAIRequestWithCapture({
+      contentType: CONTENT_TYPES.DAILY_TASK_GENERATION,
+      aiFunction,
+      modelConfig,
+      metadata: {
+        studentId: student.id,
+        studentName: student.name,
+        activityType,
+        taskType: 'story_activity_content'
+      }
+    });
+
+    const response = result.choices[0].message.content;
+    const parsedResponse = JSON.parse(response);
+    
+    // Validate the response structure
+    if (!parsedResponse || typeof parsedResponse !== 'object') {
+      throw new Error('Invalid response structure from AI');
+    }
+    
+    return parsedResponse;
+    
+  } catch (error) {
+    console.error(`Error generating ${activityType} activity content:`, error);
+    
+    // Return fallback content if AI generation fails
+    switch (activityType) {
+      case 'who':
+        return {
+          characters: [
+            { id: 'char1', name: 'Main Character', description: 'The main character of the story who goes on an adventure.' },
+            { id: 'char2', name: 'Helper', description: 'A friendly character who helps the main character along the way.' },
+            { id: 'char3', name: 'Challenge', description: 'A character who creates an obstacle or challenge in the story.' }
+          ]
+        };
+      case 'sequence':
+        return {
+          events: [
+            { id: 'event1', text: 'The story begins with the main character.' },
+            { id: 'event2', text: 'Something exciting happens.' },
+            { id: 'event3', text: 'The main character faces a challenge.' },
+            { id: 'event4', text: 'The story reaches its conclusion.' }
+          ],
+          correctOrder: ['event1', 'event2', 'event3', 'event4']
+        };
+      default:
+        return null;
     }
   }
 }

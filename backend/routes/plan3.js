@@ -1,7 +1,10 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authenticate } from '../middleware/auth.js';
-import { generateStory } from '../lib/openai.js';
+import { generateStory, generateStoryActivityContent } from '../lib/openai.js';
+
+// Concurrency limiting - prevent multiple generations for same student
+const generatingPlans = new Map();
 import { modelOverrideMiddleware, getModelConfigWithOverride } from '../middleware/modelOverride.js';
 
 const router = express.Router();
@@ -73,6 +76,10 @@ const ERROR_HANDLERS = {
     } else if (error.message.includes('validation') || error.message.includes('Invalid')) {
       errorType = 'VALIDATION_ERROR';
     }
+    
+    // For debugging, log the actual error
+    console.error('Actual error in generateStory:', error.message);
+    console.error('Error stack:', error.stack);
 
     const errorConfig = errorTypes[errorType] || {
       status: 500,
@@ -159,9 +166,10 @@ router.post('/', authenticate, async (req, res) => {
     });
   }
 
+  let student;
   try {
     // Verify the student belongs to the authenticated parent
-    const student = await prisma.student.findFirst({
+    student = await prisma.student.findFirst({
       where: { id: parseInt(studentId), parentId }
     });
 
@@ -169,77 +177,123 @@ router.post('/', authenticate, async (req, res) => {
       return res.status(404).json({ message: 'Student not found' });
     }
 
-    // Generate the story using the existing story generation logic
-    console.log(`Generating 3-day plan story for student ${student.name} with theme: ${theme}${genreCombination ? `, genre: ${genreCombination}` : ''}`);
-    
-    const storyData = await generateStory(student, theme, genreCombination);
-    
-    console.log('Story generated successfully for 3-day plan:', {
-      title: storyData.title,
-      themes: storyData.themes,
-      vocabularyCount: storyData.vocabulary?.length || 0
+    // Check if there's already a generating plan for this student (idempotency)
+    const existingPlan = await prisma.plan3.findFirst({
+      where: { 
+        studentId: parseInt(studentId),
+        status: 'generating',
+        createdAt: {
+          gte: new Date(Date.now() - 5 * 60 * 1000) // Last 5 minutes
+        }
+      }
     });
 
-    // Create the new Plan3 structure
+    if (existingPlan) {
+      return res.status(201).json({
+        message: 'Plan generation already in progress',
+        plan: { id: existingPlan.id, status: existingPlan.status }
+      });
+    }
+
+    // Check if there's an in-flight generation for this student
+    if (generatingPlans.has(parseInt(studentId))) {
+      return res.status(201).json({
+        message: 'Plan generation already in progress',
+        plan: { id: 'in-progress', status: 'generating' }
+      });
+    }
+
+    // Create a stub plan immediately
     const plan3 = await prisma.plan3.create({
       data: {
         studentId: parseInt(studentId),
         name,
         theme,
-        status: 'active'
+        status: 'generating'
       }
     });
 
-    // Create the Story3 record linked to the Plan3
-    const story3 = await prisma.story3.create({
-      data: {
-        plan3Id: plan3.id,
-        title: storyData.title,
-        themes: storyData.themes,
-        part1: storyData.part1,
-        part2: storyData.part2,
-        part3: storyData.part3
-      }
+    console.log(`Created Plan3 stub (ID: ${plan3.id}) for student ${student.name}`);
+
+    // Respond immediately with the stub
+    res.status(201).json({
+      message: '3-day plan generation started',
+      plan: { id: plan3.id, status: plan3.status }
     });
 
-    // Create the 3 days for the Plan3
-    const days = await Promise.all(
-      Array.from({ length: 3 }, (_, index) => 
-        prisma.plan3Day.create({
+    // Generate story and complete plan in background
+    setImmediate(async () => {
+      // Track this generation to prevent duplicates
+      generatingPlans.set(parseInt(studentId), true);
+      
+      try {
+        console.log(`Starting background generation for Plan3 ${plan3.id}`);
+        
+        // Generate the story using the existing story generation logic
+        console.log(`Generating 3-day plan story for student ${student.name} with theme: ${theme}${genreCombination ? `, genre: ${genreCombination}` : ''}`);
+        
+        const storyData = await generateStory(student, theme, genreCombination);
+        
+        console.log('Story generated successfully for 3-day plan:', {
+          title: storyData.title,
+          themes: storyData.themes,
+          vocabularyCount: storyData.vocabulary?.length || 0
+        });
+
+        // Create the Story3 record linked to the Plan3
+        const story3 = await prisma.story3.create({
           data: {
             plan3Id: plan3.id,
-            index: index + 1,
-            state: index === 0 ? 'available' : 'locked' // Day 1 is available, rest are locked
+            title: storyData.title,
+            themes: storyData.themes,
+            part1: storyData.part1,
+            part2: storyData.part2,
+            part3: storyData.part3
           }
-        })
-      )
-    );
+        });
 
-    console.log(`Created 3-day plan with ${days.length} days`);
+        // Create the 3 days for the Plan3
+        const days = await Promise.all(
+          Array.from({ length: 3 }, (_, index) => 
+            prisma.plan3Day.create({
+              data: {
+                plan3Id: plan3.id,
+                index: index + 1,
+                state: index === 0 ? 'available' : 'locked' // Day 1 is available, rest are locked
+              }
+            })
+          )
+        );
 
-    // Fetch the complete Plan3 with story and days
-    const completePlan3 = await prisma.plan3.findUnique({
-      where: { id: plan3.id },
-      include: {
-        student: true,
-        story: true,
-        days: {
-          orderBy: { index: 'asc' }
-        }
+        // Update plan status to ready
+        await prisma.plan3.update({
+          where: { id: plan3.id },
+          data: { status: 'active' }
+        });
+
+        console.log(`✅ Plan3 ${plan3.id} ready for student ${student.name} with ${days.length} days`);
+
+      } catch (error) {
+        console.error(`❌ Background generation failed for Plan3 ${plan3.id}:`, error);
+        
+        // Update plan status to failed
+        await prisma.plan3.update({
+          where: { id: plan3.id },
+          data: { 
+            status: 'failed',
+            theme: `${theme} (Generation Failed: ${error.message})`
+          }
+        });
+      } finally {
+        // Always clean up the tracking
+        generatingPlans.delete(parseInt(studentId));
       }
-    });
-
-    console.log(`Plan3 created successfully with story: ${story3.title}`);
-
-    res.status(201).json({
-      message: '3-day plan created successfully with story',
-      plan: completePlan3
     });
 
   } catch (error) {
     ERROR_HANDLERS.handleRouteError(error, req, res, 'PLAN3_CREATION', {
       studentId: parseInt(studentId),
-      studentName: student?.name
+      studentName: student?.name || 'Unknown'
     });
   }
 });
@@ -413,6 +467,20 @@ router.get('/:planId/day/:index', authenticate, async (req, res) => {
         break;
     }
 
+    // Generate story-specific activity content
+    let whoActivityData = { characters: [] };
+    let sequenceActivityData = { events: [], correctOrder: [] };
+    
+    try {
+      if (chapterContent) {
+        whoActivityData = await generateStoryActivityContent(chapterContent, plan3.student, 'who');
+        sequenceActivityData = await generateStoryActivityContent(chapterContent, plan3.student, 'sequence');
+      }
+    } catch (error) {
+      console.error('Error generating story activity content:', error);
+      // Continue with fallback data
+    }
+
     // Generate the 5 activities for this day based on the PRD requirements
     const activities = [
       {
@@ -424,9 +492,7 @@ router.get('/:planId/day/:index', authenticate, async (req, res) => {
         data: {
           type: 'character-matching',
           instructions: 'Match each character with their correct description from the chapter.',
-          // This would be populated with actual character data from the story
-          characters: [], // To be populated dynamically based on story content
-          descriptions: [] // To be populated dynamically based on story content
+          characters: whoActivityData.characters || []
         },
         completed: day.answers?.who ? true : false,
         response: day.answers?.who || null
@@ -455,9 +521,8 @@ router.get('/:planId/day/:index', authenticate, async (req, res) => {
         data: {
           type: 'event-ordering',
           instructions: 'Drag the events to put them in the correct order from the chapter.',
-          // This would be populated with actual events from the story
-          events: [], // To be populated dynamically based on story content
-          correctOrder: [] // To be populated dynamically based on story content
+          events: sequenceActivityData.events || [],
+          correctOrder: sequenceActivityData.correctOrder || []
         },
         completed: day.answers?.sequence ? true : false,
         response: day.answers?.sequence || null
@@ -832,5 +897,100 @@ function checkAllActivitiesComplete(answers) {
     }
   });
 }
+
+// GET /api/plan3/student/:studentId - Get the most recent Plan3 for a student
+router.get('/student/:studentId', authenticate, async (req, res) => {
+  const { studentId } = req.params;
+  const parentId = req.user.id;
+
+  console.log(`🔍 GET /api/plan3/student/${studentId} - Request from parent ${parentId}`);
+
+  try {
+    // Verify the student belongs to the authenticated parent
+    const student = await prisma.student.findFirst({
+      where: { id: parseInt(studentId), parentId }
+    });
+
+    if (!student) {
+      console.log(`❌ Student ${studentId} not found for parent ${parentId}`);
+      return res.status(404).json({ message: 'Student not found' });
+    }
+
+    console.log(`✅ Found student: ${student.name} (ID: ${student.id})`);
+    console.log(`🔍 Attempting to find Plan3 for student ${studentId}...`);
+
+    // Get the most recent Plan3 for the student
+    const plan3 = await prisma.plan3.findFirst({
+      where: { studentId: parseInt(studentId) },
+      include: {
+        student: true,
+        story: true,
+        days: {
+          orderBy: { index: 'asc' }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    if (!plan3) {
+      console.log(`ℹ️  No Plan3 found for student ${studentId}`);
+      return res.status(404).json({ message: 'No 3-day plan found for this student' });
+    }
+
+    // If plan is still generating, return it with status
+    if (plan3.status === 'generating') {
+      console.log(`⏳ Plan3 ${plan3.id} is still generating for student ${studentId}`);
+      return res.status(200).json({
+        plan: {
+          id: plan3.id,
+          studentId: plan3.studentId,
+          name: plan3.name,
+          theme: plan3.theme,
+          status: plan3.status,
+          createdAt: plan3.createdAt,
+          updatedAt: plan3.updatedAt,
+          student: plan3.student,
+          days: [],
+          story: null
+        }
+      });
+    }
+
+    // If plan failed to generate, return error status
+    if (plan3.status === 'failed') {
+      console.log(`❌ Plan3 ${plan3.id} failed to generate for student ${studentId}`);
+      return res.status(500).json({
+        message: 'Plan generation failed',
+        error: 'PLAN3_GENERATION_FAILED',
+        plan: {
+          id: plan3.id,
+          studentId: plan3.studentId,
+          name: plan3.name,
+          theme: plan3.theme,
+          status: plan3.status,
+          createdAt: plan3.createdAt,
+          updatedAt: plan3.updatedAt,
+          student: plan3.student
+        }
+      });
+    }
+
+    console.log(`✅ Found Plan3: ${plan3.id} for student ${studentId}`);
+    res.status(200).json({
+      plan: plan3
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching Plan3 for student:', error);
+    console.error('❌ Error details:', {
+      message: error.message,
+      code: error.code,
+      meta: error.meta
+    });
+    ERROR_HANDLERS.handleRouteError(error, req, res, 'PLAN3_FETCH_BY_STUDENT', {
+      studentId: parseInt(studentId)
+    });
+  }
+});
 
 export default router;
