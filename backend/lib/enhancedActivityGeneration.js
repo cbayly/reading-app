@@ -56,25 +56,69 @@ async function makeAICall(prompt, modelConfig) {
  * Validates generated content for age-appropriateness and educational value
  * @param {object} content - The content to validate
  * @param {number} studentAge - The student's age
- * @returns {object} - Validation result { isValid: boolean, reason?: string }
+ * @returns {object} - Validation result { isValid: boolean, reason?: string, severity?: 'low'|'medium'|'high' }
  */
 function validateContent(content, studentAge) {
   // Basic validation rules
-  const invalidWords = ['violent', 'inappropriate', 'offensive'];
+  const invalidWords = ['violent', 'inappropriate', 'offensive', 'dangerous', 'scary', 'frightening'];
   const contentStr = JSON.stringify(content).toLowerCase();
   
+  // Check for inappropriate words
   for (const word of invalidWords) {
     if (contentStr.includes(word)) {
       return { 
         isValid: false, 
-        reason: `Content contains inappropriate word: ${word}` 
+        reason: `Content contains inappropriate word: ${word}`,
+        severity: 'high'
       };
     }
   }
 
-  // Add more validation rules based on age groups
+  // Age-specific validation rules
   if (studentAge <= 8) {
     // Additional rules for younger students
+    const youngChildInappropriate = ['death', 'kill', 'blood', 'weapon', 'fight', 'battle'];
+    for (const word of youngChildInappropriate) {
+      if (contentStr.includes(word)) {
+        return { 
+          isValid: false, 
+          reason: `Content contains age-inappropriate word for ${studentAge}-year-old: ${word}`,
+          severity: 'high'
+        };
+      }
+    }
+  } else if (studentAge <= 12) {
+    // Rules for pre-teens
+    const preteenInappropriate = ['death', 'kill', 'blood'];
+    for (const word of preteenInappropriate) {
+      if (contentStr.includes(word)) {
+        return { 
+          isValid: false, 
+          reason: `Content contains age-inappropriate word for ${studentAge}-year-old: ${word}`,
+          severity: 'medium'
+        };
+      }
+    }
+  }
+
+  // Check for educational value
+  if (contentStr.length < 50) {
+    return { 
+      isValid: false, 
+      reason: 'Content is too short to be educationally valuable',
+      severity: 'medium'
+    };
+  }
+
+  // Check for repetitive or nonsensical content
+  const words = contentStr.split(' ');
+  const uniqueWords = new Set(words);
+  if (uniqueWords.size < words.length * 0.3) {
+    return { 
+      isValid: false, 
+      reason: 'Content appears to be repetitive or nonsensical',
+      severity: 'medium'
+    };
   }
 
   return { isValid: true };
@@ -499,16 +543,16 @@ OUTPUT FORMAT (valid JSON only):
     {
       "word": "brave",
       "definition": "Showing courage and not being afraid to face difficult situations",
-      "context": "The brave knight faced the dragon without fear."
+      "context": "The brave friend helped others when they needed it."
     }
   ],
   "decoyDefinitions": [
     {
-      "definition": "A type of armor worn by knights",
+      "definition": "A type of food that people eat",
       "isUsed": false
     },
     {
-      "definition": "A weapon used in battle",
+      "definition": "A color that is bright and cheerful",
       "isUsed": false
     }
   ]
@@ -693,17 +737,256 @@ IMPORTANT:
 }
 
 /**
- * Generates enhanced activity content for a story chapter
+ * Generates fallback content when AI generation fails or produces inappropriate content
+ * @param {string} activityType - Type of activity to generate fallback for
+ * @param {number} studentAge - The student's age
+ * @returns {object} - Fallback content appropriate for the activity type
+ */
+function generateFallbackContent(activityType, studentAge) {
+  const ageAppropriate = studentAge <= 8 ? 'simple' : studentAge <= 12 ? 'moderate' : 'advanced';
+  
+  switch (activityType) {
+    case 'who':
+      return {
+        realCharacters: [
+          {
+            name: 'Alex',
+            role: 'protagonist',
+            description: 'A brave and kind friend who helps others.'
+          },
+          {
+            name: 'Sam',
+            role: 'supporting',
+            description: 'A helpful companion who works with Alex.'
+          }
+        ],
+        decoyCharacters: [
+          {
+            name: 'Jordan',
+            role: 'helper',
+            description: 'A friendly neighbor who could help in the story.'
+          }
+        ]
+      };
+    
+    case 'where':
+      return {
+        realSettings: [
+          {
+            name: 'The Park',
+            description: 'A beautiful green space with trees and playground equipment where friends can play and have adventures.'
+          },
+          {
+            name: 'The Library',
+            description: 'A quiet place full of books and knowledge where characters can learn and discover new things.'
+          }
+        ],
+        decoySettings: [
+          {
+            name: 'The Museum',
+            description: 'An interesting place where people can learn about history and science.'
+          }
+        ]
+      };
+    
+    case 'sequence':
+      return {
+        orderedEvents: [
+          { id: 1, text: 'The friends meet at the park to play.' },
+          { id: 2, text: 'They discover something interesting in the park.' },
+          { id: 3, text: 'They work together to solve a problem.' },
+          { id: 4, text: 'They learn an important lesson about friendship.' }
+        ],
+        shuffledEvents: [
+          { id: 3, text: 'They work together to solve a problem.' },
+          { id: 1, text: 'The friends meet at the park to play.' },
+          { id: 4, text: 'They learn an important lesson about friendship.' },
+          { id: 2, text: 'They discover something interesting in the park.' }
+        ]
+      };
+    
+    case 'main-idea':
+      return {
+        question: 'What is the main idea of this story?',
+        options: [
+          {
+            id: 'A',
+            text: 'Friendship and teamwork help solve problems.',
+            isCorrect: true,
+            feedback: 'This is correct because the story shows how friends working together can overcome challenges.'
+          },
+          {
+            id: 'B',
+            text: 'Playing in the park is fun.',
+            isCorrect: false,
+            feedback: 'This is incorrect because it focuses on a minor detail rather than the main message.'
+          },
+          {
+            id: 'C',
+            text: 'Learning new things is important.',
+            isCorrect: false,
+            feedback: 'This is incorrect because it describes a general idea rather than the specific main idea.'
+          },
+          {
+            id: 'D',
+            text: 'The weather was nice that day.',
+            isCorrect: false,
+            feedback: 'This is incorrect because it describes a setting detail rather than the main idea.'
+          }
+        ]
+      };
+    
+    case 'vocabulary':
+      return {
+        vocabularyWords: [
+          {
+            word: 'brave',
+            definition: 'Showing courage and not being afraid to face difficult situations',
+            context: 'The brave friend helped others when they needed it.'
+          },
+          {
+            word: 'helpful',
+            definition: 'Willing to assist others and be useful',
+            context: 'The helpful student shared their supplies with classmates.'
+          },
+          {
+            word: 'friendly',
+            definition: 'Kind and pleasant to be around',
+            context: 'The friendly neighbor always says hello with a smile.'
+          }
+        ],
+        decoyDefinitions: [
+          {
+            definition: 'A type of food that people eat',
+            isUsed: false
+          },
+          {
+            definition: 'A color that is bright and cheerful',
+            isUsed: false
+          }
+        ]
+      };
+    
+    case 'predict':
+      return {
+        question: 'What do you think will happen next in the story?',
+        predictions: [
+          {
+            id: 'A',
+            text: 'The friends will work together to solve the problem.',
+            plausibilityScore: 9,
+            feedback: 'This is very likely because the story shows the friends helping each other.'
+          },
+          {
+            id: 'B',
+            text: 'They will ask an adult for help.',
+            plausibilityScore: 7,
+            feedback: 'This is quite likely because asking for help is a good problem-solving strategy.'
+          },
+          {
+            id: 'C',
+            text: 'They will find a creative solution.',
+            plausibilityScore: 8,
+            feedback: 'This is very likely because the story shows the friends being resourceful.'
+          },
+          {
+            id: 'D',
+            text: 'They will learn something new.',
+            plausibilityScore: 6,
+            feedback: 'This is somewhat likely because stories often teach lessons.'
+          }
+        ]
+      };
+    
+    default:
+      return {
+        error: 'Unable to generate content for this activity type',
+        fallback: true
+      };
+  }
+}
+
+/**
+ * Attempts to regenerate content with different parameters if initial generation fails
+ * @param {string} chapterContent - The story chapter text
+ * @param {number} studentAge - The student's age
+ * @param {string} activityType - Type of activity to generate
+ * @param {number} attempt - Current attempt number (1-3)
+ * @returns {Promise<object>} - Generated content or fallback
+ */
+async function attemptContentRegeneration(chapterContent, studentAge, activityType, attempt = 1) {
+  const maxAttempts = 3;
+  
+  if (attempt > maxAttempts) {
+    console.warn(`Failed to generate content after ${maxAttempts} attempts, using fallback`);
+    return generateFallbackContent(activityType, studentAge);
+  }
+
+  try {
+    // Adjust model parameters based on attempt number
+    const modelConfig = {
+      ...MODEL_CONFIG,
+      temperature: Math.max(0.3, MODEL_CONFIG.temperature - (attempt - 1) * 0.2),
+      max_tokens: Math.min(2000, MODEL_CONFIG.max_tokens + (attempt - 1) * 500)
+    };
+
+    let content;
+    switch (activityType) {
+      case 'who':
+        content = await extractCharactersWithDecoys(chapterContent, studentAge);
+        break;
+      case 'where':
+        content = await extractSettingsWithDescriptions(chapterContent, studentAge);
+        break;
+      case 'sequence':
+        content = await extractEventSequence(chapterContent, studentAge);
+        break;
+      case 'main-idea':
+        content = await extractMainIdeaWithOptions(chapterContent, studentAge);
+        break;
+      case 'vocabulary':
+        content = await extractVocabularyWithDefinitions(chapterContent, studentAge);
+        break;
+      case 'predict':
+        content = await extractPredictionOptions(chapterContent, studentAge);
+        break;
+      default:
+        throw new Error(`Unknown activity type: ${activityType}`);
+    }
+
+    // Validate the regenerated content
+    const validation = validateContent(content, studentAge);
+    if (validation.isValid) {
+      return content;
+    }
+
+    // If validation fails, try again with different parameters
+    console.warn(`Content validation failed on attempt ${attempt}: ${validation.reason}`);
+    return await attemptContentRegeneration(chapterContent, studentAge, activityType, attempt + 1);
+
+  } catch (error) {
+    console.error(`Content generation failed on attempt ${attempt}:`, error.message);
+    
+    // If it's the last attempt, return fallback
+    if (attempt >= maxAttempts) {
+      return generateFallbackContent(activityType, studentAge);
+    }
+    
+    // Otherwise, try again
+    return await attemptContentRegeneration(chapterContent, studentAge, activityType, attempt + 1);
+  }
+}
+
+/**
+ * Enhanced content generation with validation and fallback mechanisms
  * @param {string} chapterContent - The story chapter text
  * @param {object} student - Student information including age
  * @param {string} activityType - Type of activity to generate content for
- * @returns {Promise<object>} - Generated activity content
+ * @returns {Promise<object>} - Generated activity content with fallback support
  */
 export async function generateActivityContent(chapterContent, student, activityType) {
-  const modelConfig = MODEL_CONFIG;
-  
   try {
-    // Generate content based on activity type
+    // First attempt: Generate content normally
     let content;
     
     switch (activityType) {
@@ -729,20 +1012,25 @@ export async function generateActivityContent(chapterContent, student, activityT
         // Fallback to generic content generation
         content = await makeAICall(
           `Generate ${activityType} activity content for this story: ${chapterContent}`,
-          modelConfig
+          MODEL_CONFIG
         );
     }
 
     // Validate the generated content
     const validation = validateContent(content, student.age);
-    if (!validation.isValid) {
-      throw new Error('Content validation failed: ' + validation.reason);
+    if (validation.isValid) {
+      return content;
     }
 
-    return content;
+    // If validation fails, attempt regeneration with different parameters
+    console.warn(`Initial content validation failed: ${validation.reason}`);
+    return await attemptContentRegeneration(chapterContent, student.age, activityType, 1);
+
   } catch (error) {
     console.error(`Failed to generate ${activityType} content:`, error);
-    throw error;
+    
+    // Return fallback content if all attempts fail
+    return generateFallbackContent(activityType, student.age);
   }
 }
 
@@ -750,6 +1038,8 @@ export async function generateActivityContent(chapterContent, student, activityT
 export {
   makeAICall,
   validateContent,
+  generateFallbackContent,
+  attemptContentRegeneration,
   extractCharactersWithDecoys,
   extractSettingsWithDescriptions,
   extractEventSequence,
