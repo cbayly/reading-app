@@ -1,0 +1,285 @@
+/* Enhanced Reading Typography Styles */
+
+/* Optimal reading width and spacing */
+.reading-content {
+  /* Optimal reading width: 65-75 characters per line */
+  max-width: 65ch;
+  margin: 0 auto;
+  /* Force black text for all content */
+  color: #000000 !important;
+}
+
+/* Force black text for all elements inside reading content */
+.reading-content * {
+  color: #000000 !important;
+}
+
+/* Enhanced paragraph styling */
+.reading-content p {
+  /* Optimal line height for reading */
+  line-height: 1.75;
+  /* Comfortable paragraph spacing */
+  margin-bottom: 1.5rem;
+  /* No text indent for modern reading */
+  text-indent: 0;
+  /* Optimal letter spacing */
+  letter-spacing: 0.01em;
+  /* Smooth text rendering */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Prevent widows and orphans */
+  orphans: 2;
+  widows: 2;
+  /* Force black text color */
+  color: #000000 !important;
+  font-weight: 400 !important;
+}
+
+/* Enhanced heading styles */
+.reading-content h1,
+.reading-content h2,
+.reading-content h3 {
+  /* Optimal heading spacing */
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+  /* Better font weight for headings */
+  font-weight: 700;
+  /* Tighter letter spacing for headings */
+  letter-spacing: -0.02em;
+  /* Prevent widows in headings */
+  orphans: 1;
+  widows: 1;
+}
+
+/* Enhanced link styling */
+.reading-content a {
+  /* Subtle link styling */
+  color: #2563eb;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.reading-content a:hover {
+  border-bottom-color: #2563eb;
+  color: #1d4ed8;
+}
+
+/* Enhanced list styling */
+.reading-content ul,
+.reading-content ol {
+  margin-left: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.reading-content li {
+  margin-bottom: 0.5rem;
+  line-height: 1.6;
+}
+
+/* Enhanced blockquote styling */
+.reading-content blockquote {
+  border-left: 4px solid #e5e7eb;
+  padding-left: 1.5rem;
+  margin: 1.5rem 0;
+  font-style: italic;
+  color: #6b7280;
+  background-color: #f9fafb;
+  padding: 1rem 1.5rem;
+  border-radius: 0.5rem;
+}
+
+/* Enhanced code styling */
+.reading-content code {
+  background-color: #f3f4f6;
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  font-size: 0.875em;
+}
+
+.reading-content pre {
+  background-color: #1f2937;
+  color: #f9fafb;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  margin: 1.5rem 0;
+}
+
+.reading-content pre code {
+  background-color: transparent;
+  padding: 0;
+  color: inherit;
+}
+
+/* Enhanced table styling */
+.reading-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5rem 0;
+}
+
+.reading-content th,
+.reading-content td {
+  border: 1px solid #e5e7eb;
+  padding: 0.75rem;
+  text-align: left;
+}
+
+.reading-content th {
+  background-color: #f9fafb;
+  font-weight: 600;
+}
+
+/* Enhanced image styling */
+.reading-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  margin: 1.5rem 0;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+/* Enhanced horizontal rule */
+.reading-content hr {
+  border: none;
+  border-top: 2px solid #e5e7eb;
+  margin: 2rem 0;
+}
+
+/* Enhanced emphasis */
+.reading-content strong {
+  font-weight: 600;
+  color: #374151;
+}
+
+.reading-content em {
+  font-style: italic;
+  color: #6b7280;
+}
+
+/* Enhanced small text */
+.reading-content small {
+  font-size: 0.875em;
+  color: #6b7280;
+}
+
+/* Enhanced superscript and subscript */
+.reading-content sup,
+.reading-content sub {
+  font-size: 0.75em;
+  line-height: 0;
+}
+
+/* Enhanced selection styling */
+.reading-content ::selection {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+.reading-content ::-moz-selection {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+/* Enhanced focus styling for interactive elements */
+.reading-content [tabindex]:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
+
+/* Removed hover effects for paragraphs */
+
+/* Enhanced highlight styling */
+.reading-content p.highlighted {
+  background-color: #fef3c7;
+  border-left-color: #f59e0b;
+  box-shadow: 0 2px 4px rgba(245, 158, 11, 0.1);
+}
+
+/* Responsive typography adjustments */
+@media (max-width: 768px) {
+  .reading-content {
+    max-width: 100%;
+    padding: 0 1rem;
+  }
+  
+  .reading-content p {
+    font-size: 1rem;
+    line-height: 1.7;
+    margin-bottom: 1.25rem;
+  }
+  
+  .reading-content h1 {
+    font-size: 1.5rem;
+    margin-top: 1.5rem;
+  }
+  
+  .reading-content h2 {
+    font-size: 1.25rem;
+    margin-top: 1.25rem;
+  }
+}
+
+/* Dark mode support (if needed) */
+@media (prefers-color-scheme: dark) {
+  .reading-content {
+    color: #e5e7eb;
+  }
+  
+  .reading-content p {
+    color: #d1d5db;
+  }
+  
+  .reading-content blockquote {
+    background-color: #374151;
+    border-left-color: #6b7280;
+    color: #9ca3af;
+  }
+  
+  .reading-content code {
+    background-color: #374151;
+    color: #e5e7eb;
+  }
+  
+  .reading-content pre {
+    background-color: #111827;
+    color: #f9fafb;
+  }
+  
+  .reading-content th {
+    background-color: #374151;
+  }
+  
+  .reading-content th,
+  .reading-content td {
+    border-color: #4b5563;
+  }
+}
+
+/* Print styles for better reading */
+@media print {
+  .reading-content {
+    max-width: none;
+    font-size: 12pt;
+    line-height: 1.6;
+  }
+  
+  .reading-content p {
+    margin-bottom: 1rem;
+    page-break-inside: avoid;
+  }
+  
+  .reading-content h1,
+  .reading-content h2,
+  .reading-content h3 {
+    page-break-after: avoid;
+  }
+  
+  .reading-content img {
+    max-width: 100%;
+    page-break-inside: avoid;
+  }
+}

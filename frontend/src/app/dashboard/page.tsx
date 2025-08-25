@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/lib/auth';
 import { getAssessments, createAssessment, deleteStudent, updateStudent, deleteCurrentPlanForStudent, getPlanByStudentId } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
@@ -10,6 +10,7 @@ import Link from 'next/link';
 import EditStudentModal from '@/components/EditStudentModal';
 import AssessmentLoadingScreen from '@/components/AssessmentLoadingScreen';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import CreatePlan3Button from '@/components/CreatePlan3Button';
 
 interface Student {
   id: number;
@@ -41,12 +42,15 @@ export default function DashboardPage() {
   const [toast, setToast] = useState<{open: boolean; message: string; type?: 'success'|'error'|'info'}>({open: false, message: ''});
   const [plansByStudent, setPlansByStudent] = useState<Record<number, { exists: boolean; planId?: number }>>({});
   
+  // Add ref to prevent duplicate requests in Strict Mode
+  const hasFetchedRef = useRef(false);
 
   useEffect(() => {
     console.log('Dashboard useEffect triggered, authLoading:', authLoading);
     
-    // Only fetch if auth is loaded
-    if (!authLoading) {
+    // Only fetch if auth is loaded and we haven't fetched yet
+    if (!authLoading && !hasFetchedRef.current) {
+      hasFetchedRef.current = true; // Prevent duplicate requests
       console.log('Auth loading is false, starting to fetch students...');
       setStudentsLoading(true);
       
@@ -77,12 +81,12 @@ export default function DashboardPage() {
               (data || []).map(async (s: Student) => {
                 try {
                   const planRes: any = await getPlanByStudentId(s.id);
+                  if (!planRes) {
+                    return [s.id, { exists: false }] as const;
+                  }
                   const planId = planRes?.plan?.id ?? planRes?.id;
                   return [s.id, { exists: true, planId }] as const;
                 } catch (e: any) {
-                  if (e?.response?.status === 404) {
-                    return [s.id, { exists: false }] as const;
-                  }
                   // For other errors, default to unknown/false without breaking dashboard
                   console.warn('Plan check error for student', s.id, e);
                   return [s.id, { exists: false }] as const;
@@ -311,9 +315,9 @@ export default function DashboardPage() {
                               <Button
                                 variant="secondary"
                                 className="w-full"
-                                onClick={() => router.push(`/plan/${student.id}`)}
+                                onClick={() => router.push(`/plan3/${plansByStudent[student.id]?.planId}`)}
                               >
-                                View Weekly Plan
+                                View 3-Day Plan
                               </Button>
                               <button
                                 className={`w-full inline-flex items-center justify-center rounded-md border px-4 py-2 text-sm ${deletingPlanStudentId === student.id ? 'border-red-100 text-red-300' : 'border-red-200 text-red-700 hover:bg-red-50'}`}
@@ -336,6 +340,13 @@ export default function DashboardPage() {
                               </button>
                             </>
                           )}
+                          
+                          {/* Plan3 Creation Button */}
+                          <CreatePlan3Button
+                            studentId={student.id}
+                            studentName={student.name}
+                            className="w-full"
+                          />
                         </>
                       ) : (
                         <Button

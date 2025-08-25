@@ -34,6 +34,9 @@ export default function DayDetailPage() {
           if (planError?.response?.status === 404) {
             console.log('Plan not found by ID, trying to get by student ID...');
             const studentPlanResponse = await getPlanByStudentId(planId);
+            if (!studentPlanResponse) {
+              throw new Error('No plan found for this student');
+            }
             planData = studentPlanResponse.plan;
           } else {
             throw planError;
@@ -189,6 +192,9 @@ export default function DayDetailPage() {
           } catch (planError: any) {
             if (planError?.response?.status === 404) {
               const studentPlanResponse = await getPlanByStudentId(planId);
+              if (!studentPlanResponse) {
+                throw new Error('No plan found for this student');
+              }
               planData = studentPlanResponse.plan;
             } else {
               throw planError;

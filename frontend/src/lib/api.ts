@@ -109,8 +109,27 @@ export const getPlanById = async (planId: number): Promise<PlanResponse> => {
   return response.data;
 };
 
-export const getPlanByStudentId = async (studentId: number): Promise<PlanResponse> => {
-  const response = await api.get(`/plans/student/${studentId}`);
+export const getPlanByStudentId = async (studentId: number): Promise<PlanResponse | null> => {
+  try {
+    // Updated to use 3-day plan endpoint
+    const response = await api.get(`/plan3/student/${studentId}`);
+    return response.data;
+  } catch (error: any) {
+    // Handle 404 as "no plan yet" instead of error
+    if (error?.response?.status === 404) {
+      return null; // no plan exists yet
+    }
+    throw error; // re-throw other errors
+  }
+};
+
+export const getPlan3ById = async (planId: string): Promise<any> => {
+  const response = await api.get(`/plan3/${planId}`);
+  return response.data;
+};
+
+export const getPlan3DayDetails = async (planId: string, dayIndex: number): Promise<any> => {
+  const response = await api.get(`/plan3/${planId}/day/${dayIndex}`);
   return response.data;
 };
 
@@ -333,6 +352,73 @@ export const mergeOptimisticResponse = (originalPlan: any, optimisticResponse: a
     ...originalPlan,
     days: updatedDays
   };
+};
+
+// Plan3 API functions
+export const createPlan3 = async (studentId: number, name: string, theme: string, genreCombination?: string): Promise<any> => {
+  const response = await api.post('/plan3', { studentId, name, theme, genreCombination });
+  return response.data;
+};
+
+export const getPlan3 = async (planId: string): Promise<any> => {
+  const response = await api.get(`/plan3/${planId}`);
+  return response.data;
+};
+
+export const getPlan3Day = async (planId: string, dayIndex: number): Promise<any> => {
+  const response = await api.get(`/plan3/${planId}/day/${dayIndex}`);
+  return response.data;
+};
+
+export const savePlan3Answers = async (planId: string, dayIndex: number, answers: any): Promise<any> => {
+  const response = await api.post(`/plan3/${planId}/day/${dayIndex}/answers`, { answers });
+  return response.data;
+};
+
+export const pollPlan3Status = async (studentId: number, maxAttempts: number = 30): Promise<any> => {
+  let attempts = 0;
+  const baseDelay = 1000; // Start with 1 second
+  
+  while (attempts < maxAttempts) {
+    try {
+      const plan = await getPlanByStudentId(studentId);
+      
+      if (!plan) {
+        // Plan doesn't exist yet, wait a bit longer
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        attempts++;
+        continue;
+      }
+      
+      if (plan.status === 'active') {
+        return plan; // Plan is ready
+      }
+      
+      if (plan.status === 'failed') {
+        throw new Error('Plan generation failed');
+      }
+      
+      // Plan is still generating, wait and try again
+      const delay = Math.min(baseDelay * Math.pow(1.5, attempts), 5000); // Exponential backoff, max 5 seconds
+      await new Promise(resolve => setTimeout(resolve, delay));
+      attempts++;
+      
+    } catch (error: any) {
+      console.warn(`Poll attempt ${attempts + 1} failed:`, error.message);
+      
+      // If it's a network error, wait and retry
+      if (error.code === 'NETWORK_ERROR' || error.code === 'ECONNRESET') {
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        attempts++;
+        continue;
+      }
+      
+      // For other errors, throw immediately
+      throw error;
+    }
+  }
+  
+  throw new Error('Plan generation timed out after 30 attempts');
 };
 
 export default api;
