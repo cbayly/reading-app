@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import ActivityStepper, { ActivityStep } from './shared/ActivityStepper';
+import { ActivityStepper } from './shared/ActivityStepper';
 import { EnhancedActivitiesResponse, ActivityResponse } from '../../types/enhancedActivities';
 import { useActivityProgress } from '../../hooks/useActivityProgress';
 import WhoActivityEnhanced from './WhoActivityEnhanced';
@@ -9,9 +9,24 @@ import MainIdeaActivityEnhanced from './MainIdeaActivityEnhanced';
 import VocabularyActivityEnhanced from './VocabularyActivityEnhanced';
 import PredictActivityEnhanced from './PredictActivityEnhanced';
 
+interface ActivityStep {
+  id: string;
+  type: string;
+  title: string;
+  description: string;
+  isCompleted: boolean;
+  isCurrent: boolean;
+  isLocked: boolean;
+  timeSpent?: number;
+  attempts?: number;
+  score?: number;
+  lastAttempt?: Date;
+}
+
 interface EnhancedActivityPaneProps {
   data: EnhancedActivitiesResponse;
   onCompleteActivity?: (activityType: string, answers: any[], responses?: ActivityResponse[]) => void;
+  onProgressUpdate?: (activityType: string, status: 'in_progress' | 'completed' | 'not_started', timeSpent?: number) => void;
   onJumpToContext?: (anchorId: string) => void;
   className?: string;
   studentId?: string | number;
@@ -29,12 +44,12 @@ const EnhancedActivityPane: React.FC<EnhancedActivityPaneProps> = ({
 
   const steps: ActivityStep[] = useMemo(() => {
     const list: ActivityStep[] = [];
-    if (activities.who) list.push({ id: 'who', type: 'who', label: 'Who', completed: progress.who?.status === 'completed' });
-    if (activities.where) list.push({ id: 'where', type: 'where', label: 'Where', completed: progress.where?.status === 'completed' });
-    if (activities.sequence) list.push({ id: 'sequence', type: 'sequence', label: 'Sequence', completed: progress.sequence?.status === 'completed' });
-    if (activities['main-idea']) list.push({ id: 'main-idea', type: 'main-idea', label: 'Main Idea', completed: progress['main-idea']?.status === 'completed' });
-    if (activities.vocabulary) list.push({ id: 'vocabulary', type: 'vocabulary', label: 'Vocabulary', completed: progress.vocabulary?.status === 'completed' });
-    if (activities.predict) list.push({ id: 'predict', type: 'predict', label: 'Predict', completed: progress.predict?.status === 'completed' });
+    if (activities.who) list.push({ id: 'who', type: 'who', title: 'Who', description: 'Identify the main subject of the story.', isCompleted: progress.who?.status === 'completed', isCurrent: false, isLocked: false });
+    if (activities.where) list.push({ id: 'where', type: 'where', title: 'Where', description: 'Determine the location of the story.', isCompleted: progress.where?.status === 'completed', isCurrent: false, isLocked: false });
+    if (activities.sequence) list.push({ id: 'sequence', type: 'sequence', title: 'Sequence', description: 'Understand the sequence of events.', isCompleted: progress.sequence?.status === 'completed', isCurrent: false, isLocked: false });
+    if (activities['main-idea']) list.push({ id: 'main-idea', type: 'main-idea', title: 'Main Idea', description: 'Identify the central message or theme.', isCompleted: progress['main-idea']?.status === 'completed', isCurrent: false, isLocked: false });
+    if (activities.vocabulary) list.push({ id: 'vocabulary', type: 'vocabulary', title: 'Vocabulary', description: 'Learn new words and their meanings.', isCompleted: progress.vocabulary?.status === 'completed', isCurrent: false, isLocked: false });
+    if (activities.predict) list.push({ id: 'predict', type: 'predict', title: 'Predict', description: 'Make predictions about the story.', isCompleted: progress.predict?.status === 'completed', isCurrent: false, isLocked: false });
     return list;
   }, [activities, progress]);
 
@@ -47,7 +62,7 @@ const EnhancedActivityPane: React.FC<EnhancedActivityPaneProps> = ({
   const step = steps[currentIndex];
 
   // optional cross-device sync wiring
-  const { updateProgress, completeActivity, syncCrossDevice, isSaving, isOffline, isRestoring, restoredFrom, canRestore } = useActivityProgress({
+  const { updateProgress, completeActivity, syncCrossDevice, isSaving, isOffline, isRestoring, restoredFrom, canRestore, sessionInterrupted, sessionRecovered, saveSession, recoverSession, getSessionInfo } = useActivityProgress({
     studentId: String(studentId || ''),
     planId: data.planId,
     dayIndex: data.dayIndex,
@@ -65,7 +80,7 @@ const EnhancedActivityPane: React.FC<EnhancedActivityPaneProps> = ({
   }, [onCompleteActivity, completeActivity, studentId]);
 
   // Enhanced progress update handler that automatically saves progress
-  const handleProgressUpdate = useCallback((activityType: string, status: 'in_progress' | 'completed', timeSpent?: number) => {
+  const handleProgressUpdate = useCallback((activityType: string, status: 'in_progress' | 'completed' | 'not_started', timeSpent?: number) => {
     if (studentId) {
       updateProgress(status, timeSpent).catch(() => {});
     }
@@ -106,10 +121,21 @@ const EnhancedActivityPane: React.FC<EnhancedActivityPaneProps> = ({
     if (restoredFrom === 'local') {
       return 'Progress restored from local storage';
     }
+    if (restoredFrom === 'session') {
+      return 'Progress restored from previous session';
+    }
     return '';
   };
 
   const restorationMessage = getRestorationMessage();
+
+  // Handle session recovery
+  const handleSessionRecovery = useCallback(async () => {
+    await recoverSession();
+  }, [recoverSession]);
+
+  // Get session information
+  const sessionInfo = getSessionInfo();
 
   const renderActivity = () => {
     if (!step) return null;
@@ -191,6 +217,8 @@ const EnhancedActivityPane: React.FC<EnhancedActivityPaneProps> = ({
                 ? 'bg-blue-50 border-blue-200 text-blue-800' 
                 : restoredFrom === 'server'
                 ? 'bg-green-50 border-green-200 text-green-800'
+                : restoredFrom === 'session'
+                ? 'bg-purple-50 border-purple-200 text-purple-800'
                 : 'bg-yellow-50 border-yellow-200 text-yellow-800'
             }`}>
               <div className="flex items-center">
@@ -202,12 +230,58 @@ const EnhancedActivityPane: React.FC<EnhancedActivityPaneProps> = ({
                   <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
                   </svg>
+                ) : restoredFrom === 'session' ? (
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  </svg>
                 ) : (
                   <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
                   </svg>
                 )}
                 {restorationMessage}
+              </div>
+            </div>
+          )}
+          
+          {/* Session Management Status */}
+          {sessionInterrupted && (
+            <div className="bg-orange-50 border border-orange-200 text-orange-800 px-3 py-2 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                  </svg>
+                  <span className="text-sm">Previous session was interrupted</span>
+                </div>
+                <button
+                  onClick={handleSessionRecovery}
+                  className="text-xs bg-orange-100 hover:bg-orange-200 px-2 py-1 rounded transition-colors"
+                >
+                  Recover
+                </button>
+              </div>
+            </div>
+          )}
+          
+          {sessionRecovered && (
+            <div className="bg-green-50 border border-green-200 text-green-800 px-3 py-2 rounded-lg">
+              <div className="flex items-center">
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+                <span className="text-sm">Session recovered successfully</span>
+              </div>
+            </div>
+          )}
+          
+          {/* Session Information */}
+          {sessionInfo.sessionId !== 'N/A' && (
+            <div className="bg-gray-50 border border-gray-200 text-gray-700 px-3 py-2 rounded-lg">
+              <div className="flex items-center justify-between text-xs">
+                <span>Session: {sessionInfo.sessionId.substring(0, 8)}...</span>
+                <span>Time: {Math.floor(sessionInfo.totalTimeSpent / 60)}m {sessionInfo.totalTimeSpent % 60}s</span>
+                <span>Activities: {sessionInfo.activityCount}</span>
               </div>
             </div>
           )}

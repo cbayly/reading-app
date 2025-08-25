@@ -18,7 +18,7 @@ interface UseActivityProgressReturn {
   isSaving: boolean;
   lastSaved: Date | null;
   isRestoring: boolean;
-  restoredFrom: 'server' | 'local' | 'none';
+  restoredFrom: 'server' | 'local' | 'none' | 'session';
   
   // Actions
   updateProgress: (status: ActivityProgress['status'], timeSpent?: number) => Promise<void>;
@@ -31,10 +31,16 @@ interface UseActivityProgressReturn {
   forceSync: () => Promise<void>;
   
   // Answer persistence and review
-  getAnswerHistory: () => ActivityResponse[]; // New: get all answers for review
-  getLastAnswer: () => ActivityResponse | null; // New: get most recent answer
-  getAnswersByType: (type: string) => ActivityResponse[]; // New: get answers by question type
-  exportAnswers: () => string; // New: export answers for review/analysis
+  getAnswerHistory: () => ActivityResponse[];
+  getLastAnswer: () => ActivityResponse | null;
+  getAnswersByType: (type: string) => ActivityResponse[];
+  exportAnswers: () => string;
+  
+  // Session management
+  saveSession: () => Promise<void>; // New: explicit session save
+  recoverSession: () => Promise<void>; // New: recover from interruption
+  clearSession: () => void; // New: clear session data
+  getSessionInfo: () => SessionInfo; // New: get session information
   
   // Utilities
   getActivityState: () => ActivityState;
@@ -44,16 +50,44 @@ interface UseActivityProgressReturn {
   connectionQuality: 'excellent' | 'good' | 'poor' | 'offline';
   pendingSyncCount: number;
   lastSyncAttempt: Date | null;
+  sessionInterrupted: boolean; // New: indicates if session was interrupted
+  sessionRecovered: boolean; // New: indicates if session was recovered
 }
 
 const STORAGE_KEY_PREFIX = 'activity_progress_';
 const SYNC_QUEUE_KEY = 'activity_sync_queue';
+const SESSION_KEY_PREFIX = 'activity_session_';
 
 interface SyncQueueItem {
   id: string;
   action: 'update' | 'save' | 'complete' | 'reset';
   data: any;
   timestamp: number;
+}
+
+interface SessionInfo {
+  sessionId: string;
+  startedAt: Date;
+  lastActivity: Date;
+  interruptedAt?: Date;
+  recoveredAt?: Date;
+  totalTimeSpent: number;
+  activityCount: number;
+  unsavedChanges: boolean;
+}
+
+interface SessionData {
+  sessionId: string;
+  studentId: string;
+  planId: string;
+  dayIndex: number;
+  activityType: string;
+  progress: ActivityProgress;
+  startedAt: string;
+  lastActivity: string;
+  interruptedAt?: string;
+  totalTimeSpent: number;
+  activityCount: number;
 }
 
 export const useActivityProgress = ({
@@ -72,15 +106,19 @@ export const useActivityProgress = ({
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
-  const [restoredFrom, setRestoredFrom] = useState<'server' | 'local' | 'none'>('none');
+  const [restoredFrom, setRestoredFrom] = useState<'server' | 'local' | 'none' | 'session'>('none');
   const [connectionQuality, setConnectionQuality] = useState<'excellent' | 'good' | 'poor' | 'offline'>('offline');
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
   const [lastSyncAttempt, setLastSyncAttempt] = useState<Date | null>(null);
+  const [sessionInterrupted, setSessionInterrupted] = useState(false);
+  const [sessionRecovered, setSessionRecovered] = useState(false);
   
   const syncQueueRef = useRef<SyncQueueItem[]>([]);
   const lastSyncRef = useRef<Date | null>(null);
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const connectionTestRef = useRef<NodeJS.Timeout | null>(null);
+  const sessionIdRef = useRef<string | null>(null);
+  const beforeUnloadHandlerRef = useRef<((event: BeforeUnloadEvent) => void) | null>(null);
 
   // Generate storage keys
   const storageKey = `${STORAGE_KEY_PREFIX}${studentId}_${planId}_${dayIndex}_${activityType}`;
@@ -788,6 +826,218 @@ export const useActivityProgress = ({
     return JSON.stringify(progress.responses, null, 2);
   }, [progress]);
 
+  // Session management
+  const saveSession = useCallback(async () => {
+    try {
+      const sessionId = `${SESSION_KEY_PREFIX}${Date.now()}`;
+      const sessionData: SessionData = {
+        sessionId,
+        studentId,
+        planId,
+        dayIndex,
+        activityType,
+        progress: progress || {
+          id: `${studentId}_${planId}_${dayIndex}_${activityType}`,
+          activityType: activityType as ActivityProgress['activityType'],
+          status: 'not_started',
+          attempts: 0,
+          responses: []
+        },
+        startedAt: progress?.startedAt ? progress.startedAt.toISOString() : new Date().toISOString(),
+        lastActivity: new Date().toISOString(),
+        interruptedAt: sessionInterrupted ? new Date().toISOString() : undefined,
+        totalTimeSpent: progress?.timeSpent || 0,
+        activityCount: progress?.attempts || 0
+      };
+      localStorage.setItem(sessionId, JSON.stringify(sessionData));
+      setSessionInterrupted(false); // Reset interrupted state
+      setSessionRecovered(false); // Reset recovered state
+      console.log('Session saved:', sessionId);
+    } catch (err) {
+      console.warn('Failed to save session:', err);
+    }
+  }, [studentId, planId, dayIndex, activityType, progress, sessionInterrupted]);
+
+  const recoverSession = useCallback(async () => {
+    try {
+      const sessionId = localStorage.getItem('currentSessionId');
+      if (!sessionId) {
+        console.warn('No session ID found for recovery.');
+        return;
+      }
+
+      const sessionData = localStorage.getItem(sessionId);
+      if (!sessionData) {
+        console.warn('Session data not found for recovery:', sessionId);
+        return;
+      }
+
+      const parsedSessionData = JSON.parse(sessionData);
+      const recoveredProgress: ActivityProgress = {
+        id: parsedSessionData.progress.id,
+        activityType: parsedSessionData.activityType as ActivityProgress['activityType'],
+        status: parsedSessionData.progress.status,
+        startedAt: parsedSessionData.progress.startedAt ? new Date(parsedSessionData.progress.startedAt) : undefined,
+        completedAt: parsedSessionData.progress.completedAt ? new Date(parsedSessionData.progress.completedAt) : undefined,
+        timeSpent: parsedSessionData.progress.timeSpent,
+        attempts: parsedSessionData.progress.attempts,
+        responses: parsedSessionData.progress.responses?.map((r: any) => ({
+          ...r,
+          createdAt: r.createdAt ? new Date(r.createdAt) : new Date()
+        })) || []
+      };
+
+      setProgress(recoveredProgress);
+      setHasUnsavedChanges(false); // No unsaved changes in recovered session
+      setRestoredFrom('session');
+      setSessionRecovered(true);
+      console.log('Session recovered:', sessionId);
+    } catch (err) {
+      console.warn('Failed to recover session:', err);
+      setSessionRecovered(false);
+    }
+  }, []);
+
+  const clearSession = useCallback(() => {
+    const sessionId = localStorage.getItem('currentSessionId');
+    if (sessionId) {
+      localStorage.removeItem(sessionId);
+      localStorage.removeItem('currentSessionId');
+      console.log('Session cleared:', sessionId);
+    }
+    setProgress(null);
+    setHasUnsavedChanges(false);
+    setRestoredFrom('none');
+    setSessionInterrupted(false);
+    setSessionRecovered(false);
+  }, []);
+
+  const getSessionInfo = useCallback((): SessionInfo => {
+    const sessionId = localStorage.getItem('currentSessionId');
+    if (!sessionId) {
+      return {
+        sessionId: 'N/A',
+        startedAt: new Date(),
+        lastActivity: new Date(),
+        interruptedAt: undefined,
+        recoveredAt: undefined,
+        totalTimeSpent: 0,
+        activityCount: 0,
+        unsavedChanges: hasUnsavedChanges,
+      };
+    }
+
+    const sessionData = localStorage.getItem(sessionId);
+    if (!sessionData) {
+      return {
+        sessionId: sessionId,
+        startedAt: new Date(),
+        lastActivity: new Date(),
+        interruptedAt: undefined,
+        recoveredAt: undefined,
+        totalTimeSpent: 0,
+        activityCount: 0,
+        unsavedChanges: false,
+      };
+    }
+
+    const parsedSessionData = JSON.parse(sessionData);
+    return {
+      sessionId: parsedSessionData.sessionId,
+      startedAt: parsedSessionData.startedAt ? new Date(parsedSessionData.startedAt) : new Date(),
+      lastActivity: parsedSessionData.lastActivity ? new Date(parsedSessionData.lastActivity) : new Date(),
+      interruptedAt: parsedSessionData.interruptedAt ? new Date(parsedSessionData.interruptedAt) : undefined,
+      recoveredAt: parsedSessionData.recoveredAt ? new Date(parsedSessionData.recoveredAt) : undefined,
+      totalTimeSpent: parsedSessionData.totalTimeSpent || 0,
+      activityCount: parsedSessionData.activityCount || 0,
+      unsavedChanges: parsedSessionData.unsavedChanges || false,
+    };
+  }, [hasUnsavedChanges]);
+
+  // Session management event handlers
+  useEffect(() => {
+    // Create session ID if not exists
+    if (!sessionIdRef.current) {
+      sessionIdRef.current = `${SESSION_KEY_PREFIX}${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      localStorage.setItem('currentSessionId', sessionIdRef.current);
+    }
+
+    // Check for interrupted session on mount
+    const checkForInterruptedSession = () => {
+      const currentSessionId = localStorage.getItem('currentSessionId');
+      if (currentSessionId && currentSessionId !== sessionIdRef.current) {
+        const sessionData = localStorage.getItem(currentSessionId);
+        if (sessionData) {
+          try {
+            const parsedSessionData = JSON.parse(sessionData);
+            if (parsedSessionData.interruptedAt) {
+              setSessionInterrupted(true);
+              console.log('Interrupted session detected:', currentSessionId);
+            }
+          } catch (err) {
+            console.warn('Failed to parse interrupted session data:', err);
+          }
+        }
+      }
+    };
+
+    checkForInterruptedSession();
+
+    // Beforeunload handler to save session before page unload
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges || progress?.status === 'in_progress') {
+        // Save session immediately
+        saveSession();
+        
+        // Show warning to user
+        const message = 'You have unsaved changes. Are you sure you want to leave?';
+        event.preventDefault();
+        event.returnValue = message;
+        return message;
+      }
+    };
+
+    // Visibility change handler to save session when tab becomes hidden
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && (hasUnsavedChanges || progress?.status === 'in_progress')) {
+        saveSession();
+      }
+    };
+
+    // Page focus handler to recover session when page becomes visible
+    const handlePageFocus = () => {
+      if (sessionInterrupted) {
+        recoverSession();
+      }
+    };
+
+    // Add event listeners
+    beforeUnloadHandlerRef.current = handleBeforeUnload;
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handlePageFocus);
+
+    // Cleanup function
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handlePageFocus);
+    };
+  }, [hasUnsavedChanges, progress?.status, sessionInterrupted, saveSession, recoverSession]);
+
+  // Auto-save session periodically
+  useEffect(() => {
+    const autoSaveSession = () => {
+      if (progress && (hasUnsavedChanges || progress.status === 'in_progress')) {
+        saveSession();
+      }
+    };
+
+    const intervalId = setInterval(autoSaveSession, 30000); // Auto-save every 30 seconds
+
+    return () => clearInterval(intervalId);
+  }, [progress, hasUnsavedChanges, saveSession]);
+
   return {
     // State
     progress,
@@ -814,6 +1064,12 @@ export const useActivityProgress = ({
     getAnswersByType,
     exportAnswers,
     
+    // Session management
+    saveSession,
+    recoverSession,
+    clearSession,
+    getSessionInfo,
+    
     // Utilities
     getActivityState,
     hasUnsavedChanges,
@@ -821,6 +1077,8 @@ export const useActivityProgress = ({
     canRestore: restoredFrom !== 'none',
     connectionQuality,
     pendingSyncCount,
-    lastSyncAttempt
+    lastSyncAttempt,
+    sessionInterrupted,
+    sessionRecovered
   };
 };
