@@ -37,6 +37,7 @@ model Student {
   plans       Plan[]
   plan3s      Plan3[]
   genreHistory StudentGenreHistory[]
+  activityProgress ActivityProgress[]
   
   @@map("students")
 }
@@ -198,6 +199,8 @@ model Plan3 {
   student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   story       Story3?
   days        Plan3Day[]
+  activityContents ActivityContent[]
+  activityProgress ActivityProgress[]
   
   // Indexes for efficient queries
   @@index([studentId, createdAt(sort: Desc)])
@@ -241,4 +244,79 @@ model Plan3Day {
   @@index([plan3Id, index])
   
   @@map("plan3_days")
+}
+
+// Enhanced Activity Models
+model ActivityContent {
+  id            String   @id @default(cuid())
+  plan3Id       String   @map("plan3_id")
+  dayIndex      Int      @map("day_index")
+  activityType  String   @map("activity_type") // who, where, sequence, main-idea, vocabulary, predict
+  content       Json     // AI-generated content for the activity
+  studentAge    Int      @map("student_age")
+  contentHash   String   @map("content_hash") // For cache invalidation
+  expiresAt     DateTime? @map("expires_at") // For cache TTL
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  plan3         Plan3    @relation(fields: [plan3Id], references: [id], onDelete: Cascade)
+  
+  // Constraints and indexes
+  @@unique([plan3Id, dayIndex, activityType])
+  @@index([plan3Id, dayIndex])
+  @@index([contentHash])
+  @@index([expiresAt])
+  
+  @@map("activity_contents")
+}
+
+model ActivityProgress {
+  id            String   @id @default(cuid())
+  studentId     Int      @map("student_id")
+  plan3Id       String   @map("plan3_id")
+  dayIndex      Int      @map("day_index")
+  activityType  String   @map("activity_type") // who, where, sequence, main-idea, vocabulary, predict
+  status        String   @default("not_started") // not_started, in_progress, completed
+  startedAt     DateTime? @map("started_at")
+  completedAt   DateTime? @map("completed_at")
+  timeSpent     Int?     @map("time_spent") // Time spent in seconds
+  attempts      Int      @default(0)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  plan3         Plan3    @relation(fields: [plan3Id], references: [id], onDelete: Cascade)
+  responses     ActivityResponse[]
+  
+  // Constraints and indexes
+  @@unique([studentId, plan3Id, dayIndex, activityType])
+  @@index([studentId, plan3Id, dayIndex])
+  @@index([status])
+  @@index([completedAt])
+  
+  @@map("activity_progress")
+}
+
+model ActivityResponse {
+  id            String   @id @default(cuid())
+  progressId    String   @map("progress_id")
+  question      String   // The question or prompt that was answered
+  answer        Json     // Student's answer (could be string, array, object)
+  isCorrect     Boolean? @map("is_correct")
+  feedback      String?  // AI-generated feedback
+  score         Float?   // Numerical score if applicable
+  timeSpent     Int?     @map("time_spent") // Time spent on this specific response
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  // Relations
+  progress      ActivityProgress @relation(fields: [progressId], references: [id], onDelete: Cascade)
+  
+  // Indexes for efficient queries
+  @@index([progressId])
+  @@index([isCorrect])
+  @@index([createdAt])
+  
+  @@map("activity_responses")
 }

@@ -7,6 +7,7 @@ import studentRoutes from '../routes/students.js';
 import assessmentRoutes from '../routes/assessments.js';
 import planRoutes from '../routes/plans.js';
 import plan3Routes from '../routes/plan3.js';
+import enhancedActivitiesRoutes from '../routes/enhancedActivities.js';
 import { authenticate } from '../middleware/auth.js';
 
 // Load environment variables from .env file
@@ -97,6 +98,7 @@ app.use('/api/students', authenticate, studentRoutes);
 app.use('/api/assessments', authenticate, assessmentRoutes);
 // app.use('/api/plans', authenticate, planRoutes); // Disabled - replaced by 3-day plans
 app.use('/api/plan3', authenticate, plan3Routes);
+app.use('/api/enhanced-activities', authenticate, enhancedActivitiesRoutes);
 
 const PORT = process.env.PORT || 5050;
 const server = app.listen(PORT, () => {
