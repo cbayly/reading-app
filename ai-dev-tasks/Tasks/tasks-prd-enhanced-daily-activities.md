@@ -99,10 +99,10 @@
     - [x] 3.8 Test: PredictActivityEnhanced component with targeted unit tests passing [AI: GPT-4o]
   - [x] 3.9 Create `EnhancedActivityPane` orchestrator component to manage activity flow [AI: GPT-4o]
     - [x] 3.9 Test: EnhancedActivityPane component with targeted unit tests passing [AI: GPT-4o]
-  - [ ] 3.10 Implement accessibility features (ARIA labels, keyboard navigation, screen reader support) [AI: GPT-4o]
-  - [ ] 3.11 Add responsive design for mobile, tablet, and desktop viewports [AI: GPT-4o]
-  - [ ] 3.12 Implement loading states and error handling for content generation failures [AI: GPT-4o]
-  - [ ] 3.13 Write comprehensive unit tests for all enhanced activity components [AI: GPT-4o]
+  - [x] 3.10 Implement accessibility features (ARIA labels, keyboard navigation, screen reader support) [AI: GPT-4o]
+  - [x] 3.11 Add responsive design for mobile, tablet, and desktop viewports [AI: GPT-4o]
+  - [x] 3.12 Implement loading states and error handling for content generation failures [AI: GPT-4o]
+  - [x] 3.13 Write comprehensive unit tests for all enhanced activity components [AI: GPT-4o]
 
 - [ ] 4.0 Activity Progress and Persistence
   - [ ] 4.1 Create `useActivityProgress` hook for managing progress state and API calls [AI: GPT-4o]

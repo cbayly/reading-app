@@ -178,7 +178,7 @@ const PredictActivityEnhanced: React.FC<PredictActivityEnhancedProps> = ({
 
       {/* Immediate Feedback */}
       {showFeedback && feedback && (
-        <div className={`border rounded-lg p-4 transition-all duration-300 ${feedback.isCorrect ? 'border-green-200 bg-green-50 text-green-800' : 'border-yellow-200 bg-yellow-50 text-yellow-800'}`}>
+        <div className={`border rounded-lg p-4 transition-all duration-300 ${feedback.isCorrect ? 'border-green-200 bg-green-50 text-green-800' : 'border-yellow-200 bg-yellow-50 text-yellow-800'}`} role="status" aria-live="polite">
           <div className="flex items-start">
             <svg className={`w-5 h-5 mr-3 mt-0.5 flex-shrink-0 ${feedback.isCorrect ? 'text-green-600' : 'text-yellow-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               {feedback.isCorrect ? (

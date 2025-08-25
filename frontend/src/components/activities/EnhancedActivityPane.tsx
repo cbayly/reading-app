@@ -36,6 +36,8 @@ const EnhancedActivityPane: React.FC<EnhancedActivityPaneProps> = ({
   }, [activities, progress]);
 
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [isLoading] = useState(false);
+  const [error] = useState<string | null>(null);
 
   const onStepClick = useCallback((index: number) => setCurrentIndex(index), []);
 
@@ -116,6 +118,16 @@ const EnhancedActivityPane: React.FC<EnhancedActivityPaneProps> = ({
   return (
     <div className={`space-y-6 ${className}`}>
       <ActivityStepper steps={steps} currentIndex={currentIndex} onStepClick={onStepClick} />
+      {isLoading && (
+        <div role="status" aria-live="polite" className="px-4 py-3 rounded bg-gray-50 border border-gray-200 text-gray-700">
+          Loading activity...
+        </div>
+      )}
+      {error && (
+        <div role="alert" className="px-4 py-3 rounded bg-red-50 border border-red-200 text-red-700">
+          {error}
+        </div>
+      )}
       <div>{renderActivity()}</div>
     </div>
   );

@@ -282,7 +282,7 @@ const SequenceActivityEnhanced: React.FC<SequenceActivityEnhancedProps> = ({
           feedback.isCorrect 
             ? 'border-green-200 bg-green-50 text-green-800' 
             : 'border-yellow-200 bg-yellow-50 text-yellow-800'
-        }`}>
+        }`} role="status" aria-live="polite">
           <div className="flex items-start">
             <svg className={`w-5 h-5 mr-3 mt-0.5 flex-shrink-0 ${
               feedback.isCorrect ? 'text-green-600' : 'text-yellow-600'
