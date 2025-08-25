@@ -17,6 +17,8 @@ interface UseActivityProgressReturn {
   error: string | null;
   isSaving: boolean;
   lastSaved: Date | null;
+  isRestoring: boolean; // New: indicates if progress is being restored
+  restoredFrom: 'server' | 'local' | 'none'; // New: indicates where progress was restored from
   
   // Actions
   updateProgress: (status: ActivityProgress['status'], timeSpent?: number) => Promise<void>;
@@ -25,11 +27,13 @@ interface UseActivityProgressReturn {
   resetProgress: () => Promise<void>;
   syncWithServer: () => Promise<void>;
   syncCrossDevice: () => Promise<void>;
+  restoreProgress: () => Promise<void>; // New: explicit progress restoration
   
   // Utilities
   getActivityState: () => ActivityState;
   hasUnsavedChanges: boolean;
   isOffline: boolean;
+  canRestore: boolean; // New: indicates if progress can be restored
 }
 
 const STORAGE_KEY_PREFIX = 'activity_progress_';
@@ -57,6 +61,8 @@ export const useActivityProgress = ({
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
+  const [restoredFrom, setRestoredFrom] = useState<'server' | 'local' | 'none'>('none');
   
   const syncQueueRef = useRef<SyncQueueItem[]>([]);
   const lastSyncRef = useRef<Date | null>(null);
@@ -156,7 +162,7 @@ export const useActivityProgress = ({
       return null;
     } catch (err) {
       console.warn('Failed to fetch progress from server:', err);
-      return null;
+      throw err; // Re-throw the error so initialization can handle it
     }
   }, [studentId, planId, dayIndex, activityType]);
 
@@ -260,17 +266,26 @@ export const useActivityProgress = ({
     saveSyncQueue();
   }, [saveProgressToServer, saveSyncQueue, studentId, planId, dayIndex, activityType]);
 
-  // Initialize progress
+  // Initialize progress with enhanced restoration tracking
   useEffect(() => {
     const initializeProgress = async () => {
       setIsLoading(true);
       setError(null);
+      setIsRestoring(true);
+      setRestoredFrom('none');
       
       try {
         // Try to fetch from server first
         let serverProgress = null;
+        let serverError = null;
+        
         if (!isOffline) {
-          serverProgress = await fetchProgress();
+          try {
+            serverProgress = await fetchProgress();
+          } catch (err) {
+            serverError = err;
+            console.warn('Failed to fetch progress from server:', err);
+          }
         }
         
         // Load from localStorage as fallback
@@ -281,6 +296,8 @@ export const useActivityProgress = ({
         
         if (initialProgress) {
           setProgress(initialProgress);
+          setRestoredFrom(serverProgress ? 'server' : 'local');
+          
           // If we have local progress but no server progress, queue for sync
           if (localProgress && !serverProgress && offlineFallback) {
             addToSyncQueue('update', localProgress);
@@ -295,9 +312,15 @@ export const useActivityProgress = ({
             responses: []
           };
           setProgress(newProgress);
+          setRestoredFrom('none');
           if (autoSave) {
             saveToStorage(newProgress);
           }
+        }
+        
+        // If there was a server error and no progress was found, set the error
+        if (serverError && !initialProgress) {
+          setError(serverError instanceof Error ? serverError.message : 'Failed to initialize progress');
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to initialize progress');
@@ -305,6 +328,7 @@ export const useActivityProgress = ({
         const localProgress = loadFromStorage();
         if (localProgress) {
           setProgress(localProgress);
+          setRestoredFrom('local');
         } else {
           // Create new progress as fallback
           const newProgress: ActivityProgress = {
@@ -315,9 +339,11 @@ export const useActivityProgress = ({
             responses: []
           };
           setProgress(newProgress);
+          setRestoredFrom('none');
         }
       } finally {
         setIsLoading(false);
+        setIsRestoring(false);
       }
     };
     
@@ -599,6 +625,37 @@ export const useActivityProgress = ({
     };
   }, [progress, isLoading, error]);
 
+  // Restore progress from server or local
+  const restoreProgress = useCallback(async () => {
+    setIsRestoring(true);
+    setRestoredFrom('none');
+    setError(null);
+    
+    try {
+      const serverProgress = await fetchProgress();
+      if (serverProgress) {
+        setProgress(serverProgress);
+        setRestoredFrom('server');
+        console.log('Progress restored from server');
+      } else {
+        const localProgress = loadFromStorage();
+        if (localProgress) {
+          setProgress(localProgress);
+          setRestoredFrom('local');
+          console.log('Progress restored from local');
+        } else {
+          setRestoredFrom('none');
+          console.log('No progress found to restore');
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to restore progress');
+      setRestoredFrom('none');
+    } finally {
+      setIsRestoring(false);
+    }
+  }, [fetchProgress, loadFromStorage]);
+
   return {
     // State
     progress,
@@ -606,6 +663,8 @@ export const useActivityProgress = ({
     error,
     isSaving,
     lastSaved,
+    isRestoring, // New: indicates if progress is being restored
+    restoredFrom, // New: indicates where progress was restored from
     
     // Actions
     updateProgress,
@@ -614,10 +673,12 @@ export const useActivityProgress = ({
     resetProgress,
     syncWithServer,
     syncCrossDevice,
+    restoreProgress, // New: explicit progress restoration
     
     // Utilities
     getActivityState,
     hasUnsavedChanges,
-    isOffline
+    isOffline,
+    canRestore: restoredFrom !== 'none' // New: indicates if progress can be restored
   };
 };

@@ -94,6 +94,21 @@ const VocabularyActivityEnhanced: React.FC<VocabularyActivityEnhancedProps> = ({
         setMatches(restoredMatches);
         setMatchedWordIds(new Set(Object.keys(restoredMatches)));
         setMatchedDefIds(new Set(Object.values(restoredMatches)));
+        
+        // Show restoration notification if this is a restored session
+        if (progress.status === 'in_progress' && Object.keys(restoredMatches).length > 0) {
+          // Brief notification that progress was restored
+          const restorationFeedback: ActivityFeedback = {
+            isCorrect: true,
+            score: 0,
+            feedback: `Welcome back! You had matched ${Object.keys(restoredMatches).length} word(s). Continue where you left off.`,
+            suggestions: undefined,
+            nextSteps: ['Continue matching the remaining words to their definitions.']
+          };
+          setFeedback(restorationFeedback);
+          setShowFeedback(true);
+          setTimeout(() => setShowFeedback(false), 4000); // Show for 4 seconds
+        }
       }
 
       if (progress.status === 'completed' && lastResponse.feedback) {

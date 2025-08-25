@@ -47,7 +47,7 @@ const EnhancedActivityPane: React.FC<EnhancedActivityPaneProps> = ({
   const step = steps[currentIndex];
 
   // optional cross-device sync wiring
-  const { updateProgress, completeActivity, syncCrossDevice, isSaving, isOffline } = useActivityProgress({
+  const { updateProgress, completeActivity, syncCrossDevice, isSaving, isOffline, isRestoring, restoredFrom, canRestore } = useActivityProgress({
     studentId: String(studentId || ''),
     planId: data.planId,
     dayIndex: data.dayIndex,
@@ -94,6 +94,22 @@ const EnhancedActivityPane: React.FC<EnhancedActivityPaneProps> = ({
       document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [studentId, syncCrossDevice]);
+
+  // Get restoration status message
+  const getRestorationMessage = () => {
+    if (isRestoring) {
+      return 'Restoring your progress...';
+    }
+    if (restoredFrom === 'server') {
+      return 'Progress restored from server';
+    }
+    if (restoredFrom === 'local') {
+      return 'Progress restored from local storage';
+    }
+    return '';
+  };
+
+  const restorationMessage = getRestorationMessage();
 
   const renderActivity = () => {
     if (!step) return null;
@@ -167,8 +183,34 @@ const EnhancedActivityPane: React.FC<EnhancedActivityPaneProps> = ({
     <div className={`space-y-6 ${className}`}>
       <ActivityStepper steps={steps} currentIndex={currentIndex} onStepClick={onStepClick} />
       {studentId && (
-        <div className="text-xs text-gray-600">
+        <div className="text-xs text-gray-600 space-y-1">
           {isOffline ? 'Offline - changes will sync when back online' : (isSaving ? 'Syncing…' : '')}
+          {restorationMessage && (
+            <div className={`text-sm px-3 py-2 rounded-lg border ${
+              isRestoring 
+                ? 'bg-blue-50 border-blue-200 text-blue-800' 
+                : restoredFrom === 'server'
+                ? 'bg-green-50 border-green-200 text-green-800'
+                : 'bg-yellow-50 border-yellow-200 text-yellow-800'
+            }`}>
+              <div className="flex items-center">
+                {isRestoring ? (
+                  <svg className="w-4 h-4 mr-2 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                  </svg>
+                ) : restoredFrom === 'server' ? (
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                  </svg>
+                )}
+                {restorationMessage}
+              </div>
+            </div>
+          )}
         </div>
       )}
       {isLoading && (

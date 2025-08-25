@@ -37,6 +37,21 @@ const WhoActivityEnhanced: React.FC<WhoActivityEnhancedProps> = ({
       const lastResponse = progress.responses[progress.responses.length - 1];
       if (lastResponse.answer && Array.isArray(lastResponse.answer)) {
         setSelectedCharacters(lastResponse.answer);
+        
+        // Show restoration notification if this is a restored session
+        if (progress.status === 'in_progress' && lastResponse.answer.length > 0) {
+          // Brief notification that progress was restored
+          const restorationFeedback: ActivityFeedback = {
+            isCorrect: true,
+            score: 0,
+            feedback: `Welcome back! You had selected ${lastResponse.answer.length} character(s). Continue where you left off.`,
+            suggestions: undefined,
+            nextSteps: ['Continue selecting characters from the story.']
+          };
+          setFeedback(restorationFeedback);
+          setShowFeedback(true);
+          setTimeout(() => setShowFeedback(false), 4000); // Show for 4 seconds
+        }
       }
       
       // Set feedback if activity is completed

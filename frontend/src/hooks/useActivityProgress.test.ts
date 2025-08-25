@@ -666,4 +666,140 @@ describe('useActivityProgress', () => {
       expect(result.current.progress?.status).toBe('in_progress');
     });
   });
+
+  describe('progress restoration', () => {
+    it('should restore progress from server when available', async () => {
+      const serverProgress = {
+        id: 'student123_plan456_1_who',
+        activityType: 'who',
+        status: 'in_progress',
+        attempts: 2,
+        responses: [{ id: 'resp1', question: 'test', answer: ['character1'], createdAt: new Date() }],
+        startedAt: new Date('2023-01-01T10:00:00Z'),
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ progress: { who: serverProgress } }),
+      });
+
+      const { result } = renderHook(() => useActivityProgress(defaultProps));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(result.current.progress?.status).toBe('in_progress');
+      expect(result.current.restoredFrom).toBe('server');
+      expect(result.current.canRestore).toBe(true);
+    });
+
+    it('should restore progress from localStorage when server is unavailable', async () => {
+      const localProgress = {
+        id: 'student123_plan456_1_who',
+        activityType: 'who',
+        status: 'completed',
+        attempts: 1,
+        responses: [{ id: 'resp1', question: 'test', answer: ['character1'], createdAt: new Date() }],
+        startedAt: new Date('2023-01-01T10:00:00Z'),
+        completedAt: new Date('2023-01-01T11:00:00Z'),
+      };
+
+      // Mock server to return 404
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+      });
+
+      // Mock localStorage to return local progress
+      mockLocalStorage.getItem
+        .mockReturnValueOnce(null) // First call for sync queue
+        .mockReturnValueOnce(JSON.stringify(localProgress)); // Second call for progress
+
+      const { result } = renderHook(() => useActivityProgress(defaultProps));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(result.current.progress?.status).toBe('completed');
+      expect(result.current.restoredFrom).toBe('local');
+      expect(result.current.canRestore).toBe(true);
+    });
+
+    it('should handle explicit progress restoration', async () => {
+      const serverProgress = {
+        id: 'student123_plan456_1_who',
+        activityType: 'who',
+        status: 'in_progress',
+        attempts: 1,
+        responses: [],
+        startedAt: new Date('2023-01-01T10:00:00Z'),
+      };
+
+      // Mock server response for initial load (no progress)
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+      });
+
+      const { result } = renderHook(() => useActivityProgress(defaultProps));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      // Mock server response for restoration call
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ progress: { who: serverProgress } }),
+      });
+
+      // Trigger explicit restoration
+      await act(async () => {
+        await result.current.restoreProgress();
+      });
+
+      expect(result.current.isRestoring).toBe(false);
+      expect(result.current.restoredFrom).toBe('server');
+      expect(result.current.progress?.status).toBe('in_progress');
+    });
+
+    it('should show restoration status during loading', async () => {
+      const { result } = renderHook(() => useActivityProgress(defaultProps));
+
+      // During initial loading, should show restoring state
+      expect(result.current.isLoading).toBe(true);
+      expect(result.current.isRestoring).toBe(true);
+      expect(result.current.restoredFrom).toBe('none');
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(result.current.isRestoring).toBe(false);
+    });
+
+    it('should handle restoration errors gracefully', async () => {
+      // Mock server to throw error during initialization
+      mockFetch.mockRejectedValueOnce(new Error('Network error'));
+      
+      // Mock localStorage to return null (no local progress)
+      mockLocalStorage.getItem
+        .mockReturnValueOnce(null) // First call for sync queue
+        .mockReturnValueOnce(null); // Second call for progress
+
+      const { result } = renderHook(() => useActivityProgress(defaultProps));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(result.current.error).toBe('Network error');
+      expect(result.current.restoredFrom).toBe('none');
+      expect(result.current.canRestore).toBe(false);
+    });
+  });
 });

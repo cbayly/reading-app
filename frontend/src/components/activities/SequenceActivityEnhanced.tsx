@@ -38,6 +38,21 @@ const SequenceActivityEnhanced: React.FC<SequenceActivityEnhancedProps> = ({
       const lastResponse = progress.responses[progress.responses.length - 1];
       if (lastResponse.answer && Array.isArray(lastResponse.answer)) {
         setOrderedEvents(lastResponse.answer);
+        
+        // Show restoration notification if this is a restored session
+        if (progress.status === 'in_progress' && lastResponse.answer.length > 0) {
+          // Brief notification that progress was restored
+          const restorationFeedback: ActivityFeedback = {
+            isCorrect: true,
+            score: 0,
+            feedback: `Welcome back! You had ordered ${lastResponse.answer.length} event(s). Continue where you left off.`,
+            suggestions: undefined,
+            nextSteps: ['Continue ordering the events in the correct sequence.']
+          };
+          setFeedback(restorationFeedback);
+          setShowFeedback(true);
+          setTimeout(() => setShowFeedback(false), 4000); // Show for 4 seconds
+        }
       }
     } else {
       // Initialize with shuffled events
