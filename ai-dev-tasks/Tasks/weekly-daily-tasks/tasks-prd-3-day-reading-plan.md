@@ -43,45 +43,45 @@
   - [x] 1.9 Implement proper error handling and validation for all Plan3 endpoints
 
 - [ ] 2.0 Core Layout System Implementation
-  - [ ] 2.1 Create LayoutBar component with segmented control for Reading/Split/Activity modes
-  - [ ] 2.2 Implement ResizableSplit component with draggable divider and minimum width constraints
-  - [ ] 2.3 Create useReadingUiPrefs hook for localStorage persistence of layout preferences
-  - [ ] 2.4 Build main Plan3 day page with three layout modes and proper routing
-  - [ ] 2.5 Add keyboard shortcuts (r/s/a) for layout mode switching
-  - [ ] 2.6 Implement responsive design for mobile with tab-based navigation
-  - [ ] 2.7 Add smooth transitions and animations for layout mode changes
-  - [ ] 2.8 Ensure proper focus management and accessibility for layout controls
+  - [x] 2.1 Create LayoutBar component with segmented control for Reading/Split/Activity modes
+  - [x] 2.2 Implement ResizableSplit component with draggable divider and minimum width constraints
+  - [x] 2.3 Create useReadingUiPrefs hook for localStorage persistence of layout preferences
+  - [x] 2.4 Build main Plan3 day page with three layout modes and proper routing
+  - [x] 2.5 Add keyboard shortcuts (r/s/a) for layout mode switching
+  - [x] 2.6 Implement responsive design for mobile with tab-based navigation
+  - [x] 2.7 Add smooth transitions and animations for layout mode changes
+  - [x] 2.8 Ensure proper focus management and accessibility for layout controls
 
 - [ ] 3.0 Enhanced Reading Experience
-  - [ ] 3.1 Create EnhancedReadingPane component with chapter content display
-  - [ ] 3.2 Add unique anchor IDs to each paragraph for jump-to-context functionality
-  - [ ] 3.3 Implement scrollToAnchor function with smooth scrolling and highlighting
-  - [ ] 3.4 Add chapter navigation and progress indicators within reading pane
-  - [ ] 3.5 Implement proper typography and spacing for optimal reading experience
-  - [ ] 3.6 Add support for hiding/showing reading pane based on layout mode
-  - [ ] 3.7 Ensure reading content is properly structured with headings and semantic HTML
-  - [ ] 3.8 Add accessibility features like proper heading hierarchy and ARIA labels
+  - [x] 3.1 Create EnhancedReadingPane component with chapter content display
+  - [x] 3.2 Add unique anchor IDs to each paragraph for jump-to-context functionality
+  - [x] 3.3 Implement scrollToAnchor function with smooth scrolling and highlighting
+  - [x] 3.4 Add chapter navigation and progress indicators within reading pane
+  - [x] 3.5 Implement proper typography and spacing for optimal reading experience
+  - [x] 3.6 Add support for hiding/showing reading pane based on layout mode
+  - [x] 3.7 Ensure reading content is properly structured with headings and semantic HTML
+  - [x] 3.8 Add accessibility features like proper heading hierarchy and ARIA labels
 
-- [ ] 4.0 Interactive Activity Components
-  - [ ] 4.1 Create ActivityPane container with stepper interface for 5 sequential activities
-  - [ ] 4.2 Build WhoActivity component with drag-and-drop character name to description matching
-  - [ ] 4.3 Build WhereActivity component with text input and validation for location identification
-  - [ ] 4.4 Build SequenceActivity component with draggable event cards and proper ordering logic
-  - [ ] 4.5 Build MainIdeaActivity component with text input for theme identification
-  - [ ] 4.6 Build PredictActivity component with text input for next chapter predictions
-  - [ ] 4.7 Implement jump-to-context functionality from activities to reading pane paragraphs
-  - [ ] 4.8 Add proper validation and feedback for each activity type
-  - [ ] 4.9 Ensure all activities are keyboard accessible with proper ARIA support
-  - [ ] 4.10 Add activity completion indicators and progress tracking
+  - [x] 4.0 Interactive Activity Components
+  - [x] 4.1 Create ActivityPane container with stepper interface for 5 sequential activities
+  - [x] 4.2 Build WhoActivity component with drag-and-drop character name to description matching
+  - [x] 4.3 Build WhereActivity component with text input and validation for location identification
+  - [x] 4.4 Build SequenceActivity component with draggable event cards and proper ordering logic
+  - [x] 4.5 Build MainIdeaActivity component with text input for theme identification
+  - [x] 4.6 Build PredictActivity component with text input for next chapter predictions
+  - [x] 4.7 Implement jump-to-context functionality from activities to reading pane paragraphs
+  - [x] 4.8 Add proper validation and feedback for each activity type
+  - [x] 4.9 Ensure all activities are keyboard accessible with proper ARIA support
+  - [x] 4.10 Add activity completion indicators and progress tracking
 
-- [ ] 5.0 State Management and Persistence
-  - [ ] 5.1 Create useAutoSave hook with 400ms debounce for activity responses
-  - [ ] 5.2 Implement activity response state management with proper TypeScript types
-  - [ ] 5.3 Add "Saved" indicator with subtle UI feedback after successful saves
-  - [ ] 5.4 Create Plan3 TypeScript types and interfaces for frontend components
-  - [ ] 5.5 Update API client functions in lib/api.ts for Plan3 endpoints
-  - [ ] 5.6 Implement day completion logic requiring all activities + manual completion
-  - [ ] 5.7 Add plan completion flow with summary/celebration page and auto-generation
-  - [ ] 5.8 Ensure proper error handling and retry logic for failed saves
-  - [ ] 5.9 Add loading states and optimistic updates for better user experience
-  - [ ] 5.10 Implement proper cleanup and memory management for component unmounting
+  - [x] 5.0 State Management and Persistence
+  - [x] 5.1 Create useAutoSave hook with 400ms debounce for activity responses
+  - [x] 5.2 Implement activity response state management with proper TypeScript types
+  - [x] 5.3 Add "Saved" indicator with subtle UI feedback after successful saves
+  - [x] 5.4 Create Plan3 TypeScript types and interfaces for frontend components
+  - [x] 5.5 Update API client functions in lib/api.ts for Plan3 endpoints
+  - [x] 5.6 Implement day completion logic requiring all activities + manual completion
+  - [x] 5.7 Add plan completion flow with summary/celebration page and auto-generation
+  - [x] 5.8 Ensure proper error handling and retry logic for failed saves
+  - [x] 5.9 Add loading states and optimistic updates for better user experience
+  - [x] 5.10 Implement proper cleanup and memory management for component unmounting
