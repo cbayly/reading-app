@@ -802,4 +802,499 @@ describe('useActivityProgress', () => {
       expect(result.current.canRestore).toBe(false);
     });
   });
+
+  describe('session management', () => {
+    beforeEach(() => {
+      // Mock document.visibilityState
+      Object.defineProperty(document, 'visibilityState', {
+        value: 'visible',
+        writable: true,
+      });
+      
+      // Mock window event listeners
+      window.addEventListener = jest.fn();
+      window.removeEventListener = jest.fn();
+      document.addEventListener = jest.fn();
+      document.removeEventListener = jest.fn();
+    });
+
+    it('should create session ID on initialization', async () => {
+      const { result } = renderHook(() => useActivityProgress(defaultProps));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(mockLocalStorage.setItem).toHaveBeenCalledWith(
+        'currentSessionId',
+        expect.stringMatching(/activity_session_\d+_[a-z0-9]+/)
+      );
+    });
+
+    it('should save session data when progress changes', async () => {
+      const { result } = renderHook(() => useActivityProgress(defaultProps));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      await act(async () => {
+        await result.current.updateProgress('in_progress');
+      });
+
+      // Should save session data
+      expect(mockLocalStorage.setItem).toHaveBeenCalledWith(
+        expect.stringMatching(/activity_session_\d+_[a-z0-9]+/),
+        expect.stringContaining('"activityType":"who"')
+      );
+    });
+
+    it('should detect interrupted session on mount', async () => {
+      const interruptedSessionData = {
+        sessionId: 'activity_session_1234567890_abc123',
+        studentId: 'student123',
+        planId: 'plan456',
+        dayIndex: 1,
+        activityType: 'who',
+        progress: {
+          id: 'student123_plan456_1_who',
+          activityType: 'who',
+          status: 'in_progress',
+          attempts: 1,
+          responses: []
+        },
+        startedAt: '2023-01-01T10:00:00Z',
+        lastActivity: '2023-01-01T10:30:00Z',
+        interruptedAt: '2023-01-01T10:30:00Z',
+        totalTimeSpent: 1800,
+        activityCount: 1
+      };
+
+      mockLocalStorage.getItem
+        .mockReturnValueOnce('activity_session_1234567890_abc123') // currentSessionId
+        .mockReturnValueOnce(JSON.stringify(interruptedSessionData)); // session data
+
+      const { result } = renderHook(() => useActivityProgress(defaultProps));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(result.current.sessionInterrupted).toBe(true);
+    });
+
+    it('should recover session when requested', async () => {
+      const sessionData = {
+        sessionId: 'activity_session_1234567890_abc123',
+        studentId: 'student123',
+        planId: 'plan456',
+        dayIndex: 1,
+        activityType: 'who',
+        progress: {
+          id: 'student123_plan456_1_who',
+          activityType: 'who',
+          status: 'in_progress',
+          attempts: 2,
+          responses: [
+            { id: 'resp1', question: 'test', answer: 'test', createdAt: '2023-01-01T10:00:00Z' }
+          ]
+        },
+        startedAt: '2023-01-01T10:00:00Z',
+        lastActivity: '2023-01-01T10:30:00Z',
+        totalTimeSpent: 1800,
+        activityCount: 2
+      };
+
+      mockLocalStorage.getItem
+        .mockReturnValueOnce('activity_session_1234567890_abc123') // currentSessionId
+        .mockReturnValueOnce(JSON.stringify(sessionData)); // session data
+
+      const { result } = renderHook(() => useActivityProgress(defaultProps));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      await act(async () => {
+        await result.current.recoverSession();
+      });
+
+      expect(result.current.sessionRecovered).toBe(true);
+      expect(result.current.restoredFrom).toBe('session');
+      expect(result.current.progress?.attempts).toBe(2);
+      expect(result.current.progress?.responses).toHaveLength(1);
+    });
+
+    it('should clear session data when requested', async () => {
+      const { result } = renderHook(() => useActivityProgress(defaultProps));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      await act(async () => {
+        await result.current.updateProgress('in_progress');
+      });
+
+      await act(() => {
+        result.current.clearSession();
+      });
+
+      expect(mockLocalStorage.removeItem).toHaveBeenCalledWith('currentSessionId');
+      expect(result.current.progress).toBe(null);
+      expect(result.current.hasUnsavedChanges).toBe(false);
+    });
+
+    it('should provide session information', async () => {
+      const { result } = renderHook(() => useActivityProgress(defaultProps));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      const sessionInfo = result.current.getSessionInfo();
+      expect(sessionInfo.sessionId).toBe('N/A');
+      expect(sessionInfo.totalTimeSpent).toBe(0);
+      expect(sessionInfo.activityCount).toBe(0);
+      expect(sessionInfo.unsavedChanges).toBe(false);
+    });
+
+    it('should handle beforeunload event with unsaved changes', async () => {
+      const { result } = renderHook(() => useActivityProgress(defaultProps));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      await act(async () => {
+        await result.current.updateProgress('in_progress');
+      });
+
+      // Simulate beforeunload event
+      const beforeUnloadEvent = new Event('beforeunload') as any;
+      beforeUnloadEvent.preventDefault = jest.fn();
+      beforeUnloadEvent.returnValue = '';
+
+      // Trigger the event handler
+      const eventListeners = (window.addEventListener as jest.Mock).mock.calls;
+      const beforeUnloadHandler = eventListeners.find(call => call[0] === 'beforeunload')[1];
+      beforeUnloadHandler(beforeUnloadEvent);
+
+      expect(beforeUnloadEvent.preventDefault).toHaveBeenCalled();
+      expect(beforeUnloadEvent.returnValue).toBe('You have unsaved changes. Are you sure you want to leave?');
+    });
+  });
+
+  describe('connection quality monitoring', () => {
+    beforeEach(() => {
+      // Mock setInterval and clearInterval
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('should test connection quality on initialization', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+      });
+
+      const { result } = renderHook(() => useActivityProgress(defaultProps));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      // Should test connection quality immediately
+      expect(mockFetch).toHaveBeenCalledWith('/api/enhanced-activities/health', {
+        method: 'HEAD',
+        cache: 'no-cache'
+      });
+    });
+
+    it('should update connection quality based on response time', async () => {
+      const startTime = Date.now();
+      mockFetch.mockImplementation(() => {
+        const endTime = Date.now();
+        const latency = endTime - startTime;
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+        });
+      });
+
+      const { result } = renderHook(() => useActivityProgress(defaultProps));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      // Fast response should be excellent
+      expect(result.current.connectionQuality).toBe('excellent');
+    });
+
+    it('should handle connection quality test failures', async () => {
+      mockFetch.mockRejectedValue(new Error('Network error'));
+
+      const { result } = renderHook(() => useActivityProgress(defaultProps));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(result.current.connectionQuality).toBe('offline');
+    });
+
+    it('should process sync queue when connection quality is good', async () => {
+      // Mock good connection quality
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+      });
+
+      const { result } = renderHook(() => useActivityProgress(defaultProps));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      // Simulate coming back online with good connection
+      await act(async () => {
+        await result.current.updateProgress('in_progress');
+      });
+
+      // Should process sync queue when connection is good
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringMatching(/\/api\/enhanced-activities\/progress/),
+        expect.any(Object)
+      );
+    });
+  });
+
+  describe('enhanced state tracking', () => {
+    it('should validate state transitions correctly', async () => {
+      const { result } = renderHook(() => useActivityProgress(defaultProps));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      // Valid transition: not_started -> in_progress
+      await act(async () => {
+        await result.current.updateProgress('in_progress');
+      });
+
+      expect(result.current.progress?.status).toBe('in_progress');
+
+      // Valid transition: in_progress -> completed
+      await act(async () => {
+        await result.current.updateProgress('completed');
+      });
+
+      expect(result.current.progress?.status).toBe('completed');
+
+      // Valid transition: completed -> not_started (reset)
+      await act(async () => {
+        await result.current.updateProgress('not_started');
+      });
+
+      expect(result.current.progress?.status).toBe('not_started');
+    });
+
+    it('should return enhanced activity state', async () => {
+      const { result } = renderHook(() => useActivityProgress(defaultProps));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      await act(async () => {
+        await result.current.updateProgress('in_progress');
+      });
+
+      const activityState = result.current.getActivityState();
+      expect(activityState.status).toBe('in_progress');
+      expect(activityState.canProceed).toBe(false); // No responses yet
+      expect(activityState.isLocked).toBe(false);
+      expect(activityState.isCompleted).toBe(false);
+    });
+
+    it('should lock activity after too many attempts', async () => {
+      const { result } = renderHook(() => useActivityProgress(defaultProps));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      // Add 5 attempts
+      for (let i = 0; i < 5; i++) {
+        await act(async () => {
+          await result.current.saveResponse({
+            id: `resp${i}`,
+            question: 'test',
+            answer: 'test',
+            createdAt: new Date()
+          });
+        });
+      }
+
+      const activityState = result.current.getActivityState();
+      expect(activityState.isLocked).toBe(true);
+      expect(activityState.currentAttempt).toBe(5);
+    });
+
+    it('should allow proceeding when activity has responses', async () => {
+      const { result } = renderHook(() => useActivityProgress(defaultProps));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      await act(async () => {
+        await result.current.updateProgress('in_progress');
+        await result.current.saveResponse({
+          id: 'resp1',
+          question: 'test',
+          answer: 'test',
+          createdAt: new Date()
+        });
+      });
+
+      const activityState = result.current.getActivityState();
+      expect(activityState.canProceed).toBe(true);
+    });
+  });
+
+  describe('answer persistence and review', () => {
+    it('should get answer history', async () => {
+      const { result } = renderHook(() => useActivityProgress(defaultProps));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      const responses = [
+        { id: 'resp1', question: 'Who is the main character?', answer: 'Alice', createdAt: new Date() },
+        { id: 'resp2', question: 'Where does the story take place?', answer: 'Wonderland', createdAt: new Date() }
+      ];
+
+      for (const response of responses) {
+        await act(async () => {
+          await result.current.saveResponse(response);
+        });
+      }
+
+      const answerHistory = result.current.getAnswerHistory();
+      expect(answerHistory).toHaveLength(2);
+      expect(answerHistory[0].answer).toBe('Alice');
+      expect(answerHistory[1].answer).toBe('Wonderland');
+    });
+
+    it('should get last answer', async () => {
+      const { result } = renderHook(() => useActivityProgress(defaultProps));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      const responses = [
+        { id: 'resp1', question: 'First question', answer: 'First answer', createdAt: new Date() },
+        { id: 'resp2', question: 'Second question', answer: 'Second answer', createdAt: new Date() }
+      ];
+
+      for (const response of responses) {
+        await act(async () => {
+          await result.current.saveResponse(response);
+        });
+      }
+
+      const lastAnswer = result.current.getLastAnswer();
+      expect(lastAnswer?.answer).toBe('Second answer');
+    });
+
+    it('should get answers by type', async () => {
+      const { result } = renderHook(() => useActivityProgress(defaultProps));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      const responses = [
+        { id: 'resp1', question: 'Who is the main character?', answer: 'Alice', createdAt: new Date() },
+        { id: 'resp2', question: 'Where does the story take place?', answer: 'Wonderland', createdAt: new Date() },
+        { id: 'resp3', question: 'Who is the villain?', answer: 'Queen', createdAt: new Date() }
+      ];
+
+      for (const response of responses) {
+        await act(async () => {
+          await result.current.saveResponse(response);
+        });
+      }
+
+      const whoAnswers = result.current.getAnswersByType('Who');
+      expect(whoAnswers).toHaveLength(2); // "Who is the main character?" and "Who is the villain?"
+    });
+
+    it('should export answers as JSON', async () => {
+      const { result } = renderHook(() => useActivityProgress(defaultProps));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      const responses = [
+        { id: 'resp1', question: 'Test question', answer: 'Test answer', createdAt: new Date() }
+      ];
+
+      for (const response of responses) {
+        await act(async () => {
+          await result.current.saveResponse(response);
+        });
+      }
+
+      const exportedAnswers = result.current.exportAnswers();
+      const parsedAnswers = JSON.parse(exportedAnswers);
+      expect(parsedAnswers).toHaveLength(1);
+      expect(parsedAnswers[0].answer).toBe('Test answer');
+    });
+  });
+
+  describe('force sync functionality', () => {
+    it('should force immediate sync', async () => {
+      const { result } = renderHook(() => useActivityProgress(defaultProps));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      await act(async () => {
+        await result.current.updateProgress('in_progress');
+      });
+
+      await act(async () => {
+        await result.current.forceSync();
+      });
+
+      expect(result.current.isSaving).toBe(false);
+      expect(result.current.lastSyncAttempt).toBeInstanceOf(Date);
+    });
+
+    it('should handle force sync errors', async () => {
+      mockFetch.mockRejectedValue(new Error('Sync failed'));
+
+      const { result } = renderHook(() => useActivityProgress(defaultProps));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      await act(async () => {
+        await result.current.forceSync();
+      });
+
+      expect(result.current.error).toBe('Sync failed');
+    });
+  });
 });
