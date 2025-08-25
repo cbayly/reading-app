@@ -340,6 +340,137 @@ describe('useActivityProgress', () => {
     });
   });
 
+  describe('cross-device synchronization', () => {
+    it('should sync with server when server has more recent data', async () => {
+      const serverProgress = {
+        id: 'student123_plan456_1_who',
+        activityType: 'who',
+        status: 'completed',
+        attempts: 2,
+        responses: [{ id: 'resp1', question: 'test', answer: 'test', createdAt: new Date() }],
+        startedAt: new Date('2023-01-01T10:00:00Z'),
+        completedAt: new Date('2023-01-01T11:00:00Z'),
+      };
+
+      const localProgress = {
+        id: 'student123_plan456_1_who',
+        activityType: 'who',
+        status: 'in_progress',
+        attempts: 1,
+        responses: [],
+        startedAt: new Date('2023-01-01T09:00:00Z'),
+      };
+
+      // Mock server response
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ progress: { who: serverProgress } }),
+      });
+
+      // Mock localStorage to return local progress
+      mockLocalStorage.getItem
+        .mockReturnValueOnce(null) // First call for sync queue
+        .mockReturnValueOnce(JSON.stringify(localProgress)); // Second call for progress
+
+      const { result } = renderHook(() => useActivityProgress(defaultProps));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      // Trigger cross-device sync
+      await act(async () => {
+        await result.current.syncCrossDevice();
+      });
+
+      // Should use server progress since it's more recent
+      expect(result.current.progress?.status).toBe('completed');
+      expect(result.current.progress?.attempts).toBe(2);
+    });
+
+    it('should push local progress when local has more recent data', async () => {
+      const serverProgress = {
+        id: 'student123_plan456_1_who',
+        activityType: 'who',
+        status: 'in_progress',
+        attempts: 1,
+        responses: [],
+        startedAt: new Date('2023-01-01T09:00:00Z'),
+      };
+
+      const localProgress = {
+        id: 'student123_plan456_1_who',
+        activityType: 'who',
+        status: 'completed',
+        attempts: 2,
+        responses: [{ id: 'resp1', question: 'test', answer: 'test', createdAt: new Date() }],
+        startedAt: new Date('2023-01-01T10:00:00Z'),
+        completedAt: new Date('2023-01-01T11:00:00Z'),
+      };
+
+      // Mock server response
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ progress: { who: serverProgress } }),
+      });
+
+      // Mock localStorage to return local progress
+      mockLocalStorage.getItem
+        .mockReturnValueOnce(null) // First call for sync queue
+        .mockReturnValueOnce(JSON.stringify(localProgress)); // Second call for progress
+
+      const { result } = renderHook(() => useActivityProgress(defaultProps));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      // Trigger cross-device sync
+      await act(async () => {
+        await result.current.syncCrossDevice();
+      });
+
+      // Should push local progress to server since it's more recent
+      expect(mockFetch).toHaveBeenCalledWith('/api/enhanced-activities/progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: expect.stringContaining('"status":"completed"'),
+      });
+    });
+
+    it('should handle sync when no local progress exists', async () => {
+      const serverProgress = {
+        id: 'student123_plan456_1_who',
+        activityType: 'who',
+        status: 'completed',
+        attempts: 1,
+        responses: [],
+        startedAt: new Date('2023-01-01T10:00:00Z'),
+        completedAt: new Date('2023-01-01T11:00:00Z'),
+      };
+
+      // Mock server response
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ progress: { who: serverProgress } }),
+      });
+
+      const { result } = renderHook(() => useActivityProgress(defaultProps));
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      // Trigger cross-device sync
+      await act(async () => {
+        await result.current.syncCrossDevice();
+      });
+
+      // Should use server progress since no local progress exists
+      expect(result.current.progress?.status).toBe('completed');
+    });
+  });
+
   describe('reset functionality', () => {
     it('should reset progress to initial state', async () => {
       const { result } = renderHook(() => useActivityProgress(defaultProps));

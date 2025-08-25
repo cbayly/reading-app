@@ -1,6 +1,7 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import ActivityStepper, { ActivityStep } from './shared/ActivityStepper';
 import { EnhancedActivitiesResponse, ActivityResponse } from '../../types/enhancedActivities';
+import { useActivityProgress } from '../../hooks/useActivityProgress';
 import WhoActivityEnhanced from './WhoActivityEnhanced';
 import WhereActivityEnhanced from './WhereActivityEnhanced';
 import SequenceActivityEnhanced from './SequenceActivityEnhanced';
@@ -13,13 +14,15 @@ interface EnhancedActivityPaneProps {
   onCompleteActivity?: (activityType: string, answers: any[], responses?: ActivityResponse[]) => void;
   onJumpToContext?: (anchorId: string) => void;
   className?: string;
+  studentId?: string | number;
 }
 
 const EnhancedActivityPane: React.FC<EnhancedActivityPaneProps> = ({
   data,
   onCompleteActivity,
   onJumpToContext,
-  className = ''
+  className = '',
+  studentId
 }) => {
   const activities = data.activities;
   const progress = data.progress;
@@ -43,9 +46,46 @@ const EnhancedActivityPane: React.FC<EnhancedActivityPaneProps> = ({
 
   const step = steps[currentIndex];
 
+  // optional cross-device sync wiring
+  const { updateProgress, completeActivity, syncCrossDevice, isSaving, isOffline } = useActivityProgress({
+    studentId: String(studentId || ''),
+    planId: data.planId,
+    dayIndex: data.dayIndex,
+    activityType: step?.type || 'who',
+    autoSave: true,
+    offlineFallback: true
+  });
+
   const handleComplete = useCallback((activityType: string, answers: any[], responses?: ActivityResponse[]) => {
+    if (studentId && responses && Array.isArray(responses)) {
+      const timeSpent = responses.reduce((acc, r) => acc + (r.timeSpent || 0), 0);
+      completeActivity(responses, timeSpent).catch(() => {});
+    }
     onCompleteActivity?.(activityType, answers, responses);
-  }, [onCompleteActivity]);
+  }, [onCompleteActivity, completeActivity, studentId]);
+
+  useEffect(() => {
+    if (!studentId || !step) return;
+    updateProgress('in_progress').catch(() => {});
+  }, [studentId, step?.type, updateProgress, step]);
+
+  useEffect(() => {
+    if (!studentId) return;
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        syncCrossDevice().catch(() => {});
+      }
+    };
+    const onFocus = () => {
+      syncCrossDevice().catch(() => {});
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [studentId, syncCrossDevice]);
 
   const renderActivity = () => {
     if (!step) return null;
@@ -118,6 +158,11 @@ const EnhancedActivityPane: React.FC<EnhancedActivityPaneProps> = ({
   return (
     <div className={`space-y-6 ${className}`}>
       <ActivityStepper steps={steps} currentIndex={currentIndex} onStepClick={onStepClick} />
+      {studentId && (
+        <div className="text-xs text-gray-600">
+          {isOffline ? 'Offline - changes will sync when back online' : (isSaving ? 'Syncing…' : '')}
+        </div>
+      )}
       {isLoading && (
         <div role="status" aria-live="polite" className="px-4 py-3 rounded bg-gray-50 border border-gray-200 text-gray-700">
           Loading activity...

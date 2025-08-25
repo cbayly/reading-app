@@ -1155,7 +1155,7 @@ describe('Enhanced Activity Generation', () => {
         mockCreate.mockRejectedValue(new Error('401 Unauthorized'));
 
         await expect(makeAICall('test prompt', {}))
-          .rejects
+        .rejects
           .toThrow('Authentication failed');
         
         expect(mockCreate).toHaveBeenCalledTimes(1);

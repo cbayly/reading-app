@@ -342,17 +342,17 @@ async function makeAICall(prompt, modelConfig, attempt = 1) {
     
     // Set up timeout
     const timeoutMs = ERROR_CONFIG.timeoutMs;
-    let timeoutId;
-    const timeoutPromise = new Promise((_, reject) => {
-      timeoutId = setTimeout(() => reject(new Error('AI call timed out')), timeoutMs);
-    });
+  let timeoutId;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error('AI call timed out')), timeoutMs);
+  });
 
-    try {
-      const openai = getOpenAIClient();
-      const aiPromise = openai.chat.completions.create({
-        ...modelConfig,
-        messages: [{ role: 'user', content: prompt }]
-      });
+  try {
+    const openai = getOpenAIClient();
+    const aiPromise = openai.chat.completions.create({
+      ...modelConfig,
+      messages: [{ role: 'user', content: prompt }]
+    });
 
       const response = await Promise.race([aiPromise, timeoutPromise]);
       clearTimeout(timeoutId);
@@ -1384,9 +1384,9 @@ export async function generateActivityContent(chapterContent, student, activityT
         default:
           // Fallback to generic content generation
           content = await makeAICall(
-            `Generate ${activityType} activity content for this story: ${chapterContent}`,
+      `Generate ${activityType} activity content for this story: ${chapterContent}`,
             MODEL_CONFIG
-          );
+    );
       }
     } catch (error) {
       console.error(`Content generation failed for ${activityType}:`, error.message);

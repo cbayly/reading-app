@@ -24,6 +24,7 @@ interface UseActivityProgressReturn {
   completeActivity: (responses: ActivityResponse[], timeSpent: number) => Promise<void>;
   resetProgress: () => Promise<void>;
   syncWithServer: () => Promise<void>;
+  syncCrossDevice: () => Promise<void>;
   
   // Utilities
   getActivityState: () => ActivityState;
@@ -133,7 +134,26 @@ export const useActivityProgress = ({
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
       const data = await response.json();
-      return data.progress?.[activityType] || null;
+      const serverProgress = data.progress?.[activityType];
+      
+      if (serverProgress) {
+        // Convert server progress to ActivityProgress format
+        return {
+          id: `${studentId}_${planId}_${dayIndex}_${activityType}`,
+          activityType: activityType as ActivityProgress['activityType'],
+          status: serverProgress.status,
+          startedAt: serverProgress.startedAt ? new Date(serverProgress.startedAt) : undefined,
+          completedAt: serverProgress.completedAt ? new Date(serverProgress.completedAt) : undefined,
+          timeSpent: serverProgress.timeSpent,
+          attempts: serverProgress.attempts,
+          responses: serverProgress.responses?.map((r: any) => ({
+            ...r,
+            createdAt: new Date(r.createdAt)
+          })) || []
+        };
+      }
+      
+      return null;
     } catch (err) {
       console.warn('Failed to fetch progress from server:', err);
       return null;
@@ -143,18 +163,29 @@ export const useActivityProgress = ({
   // API call to save progress to server
   const saveProgressToServer = useCallback(async (progressData: ActivityProgress): Promise<boolean> => {
     try {
+      // Convert ActivityProgress to the format expected by the API
+      const apiPayload = {
+        planId,
+        dayIndex,
+        activityType,
+        status: progressData.status,
+        timeSpent: progressData.timeSpent,
+        answers: progressData.responses.map(response => ({
+          question: response.question,
+          answer: response.answer,
+          isCorrect: response.isCorrect,
+          feedback: response.feedback,
+          score: response.score,
+          timeSpent: response.timeSpent
+        }))
+      };
+
       const response = await fetch('/api/enhanced-activities/progress', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          studentId,
-          planId,
-          dayIndex,
-          activityType,
-          progress: progressData
-        }),
+        body: JSON.stringify(apiPayload),
       });
       
       if (!response.ok) {
@@ -204,9 +235,15 @@ export const useActivityProgress = ({
             break;
           case 'reset':
             // For reset, we need to clear the progress
-            success = await fetch(`/api/enhanced-activities/progress/${studentId}/${planId}/${dayIndex}`, {
-              method: 'DELETE'
-            }).then(r => r.ok);
+            // Since the API doesn't have a DELETE endpoint, we'll mark as not_started
+            const resetProgress: ActivityProgress = {
+              id: `${studentId}_${planId}_${dayIndex}_${activityType}`,
+              activityType: activityType as ActivityProgress['activityType'],
+              status: 'not_started',
+              attempts: 0,
+              responses: []
+            };
+            success = await saveProgressToServer(resetProgress);
             break;
         }
         
@@ -221,7 +258,7 @@ export const useActivityProgress = ({
     // Remove successful items from queue
     syncQueueRef.current = syncQueueRef.current.filter(item => !successfulItems.includes(item.id));
     saveSyncQueue();
-  }, [saveProgressToServer, saveSyncQueue, studentId, planId, dayIndex]);
+  }, [saveProgressToServer, saveSyncQueue, studentId, planId, dayIndex, activityType]);
 
   // Initialize progress
   useEffect(() => {
@@ -331,6 +368,8 @@ export const useActivityProgress = ({
     };
   }, [processSyncQueue]);
 
+
+
   // Update progress status
   const updateProgress = useCallback(async (status: ActivityProgress['status'], timeSpent?: number) => {
     if (!progress) return;
@@ -437,11 +476,9 @@ export const useActivityProgress = ({
       console.warn('Failed to clear localStorage:', err);
     }
     
-    // Try to reset on server
+    // Try to reset on server by saving the reset progress
     if (!isOffline) {
-      const success = await fetch(`/api/enhanced-activities/progress/${studentId}/${planId}/${dayIndex}`, {
-        method: 'DELETE'
-      }).then(r => r.ok);
+      const success = await saveProgressToServer(newProgress);
       
       if (!success && offlineFallback) {
         addToSyncQueue('reset', {});
@@ -449,7 +486,7 @@ export const useActivityProgress = ({
     } else if (offlineFallback) {
       addToSyncQueue('reset', {});
     }
-  }, [studentId, planId, dayIndex, activityType, isOffline, offlineFallback, storageKey, addToSyncQueue]);
+  }, [studentId, planId, dayIndex, activityType, isOffline, offlineFallback, storageKey, addToSyncQueue, saveProgressToServer]);
 
   // Sync with server
   const syncWithServer = useCallback(async () => {
@@ -465,6 +502,59 @@ export const useActivityProgress = ({
       setIsSaving(false);
     }
   }, [isOffline, processSyncQueue]);
+
+  // Cross-device synchronization with conflict resolution
+  const syncCrossDevice = useCallback(async () => {
+    if (isOffline) return;
+    
+    setIsSaving(true);
+    try {
+      // Fetch latest progress from server
+      const serverProgress = await fetchProgress();
+      
+      if (serverProgress && progress) {
+        // Compare timestamps to resolve conflicts
+        const serverLastUpdate = serverProgress.completedAt || serverProgress.startedAt;
+        const localLastUpdate = progress.completedAt || progress.startedAt;
+        
+        if (serverLastUpdate && localLastUpdate) {
+          const serverTime = new Date(serverLastUpdate).getTime();
+          const localTime = new Date(localLastUpdate).getTime();
+          
+          // If server has more recent data, use it
+          if (serverTime > localTime) {
+            setProgress(serverProgress);
+            saveToStorage(serverProgress);
+            console.log('Synced with server progress (server was more recent)');
+          } else if (localTime > serverTime) {
+            // If local has more recent data, push to server
+            const success = await saveProgressToServer(progress);
+            if (success) {
+              console.log('Pushed local progress to server (local was more recent)');
+            }
+          }
+        } else if (serverProgress && !progress.completedAt && !progress.startedAt) {
+          // If local has no progress but server does, use server
+          setProgress(serverProgress);
+          saveToStorage(serverProgress);
+          console.log('Synced with server progress (local had no progress)');
+        }
+      } else if (serverProgress && !progress) {
+        // If no local progress but server has some, use server
+        setProgress(serverProgress);
+        saveToStorage(serverProgress);
+        console.log('Synced with server progress (no local progress)');
+      }
+      
+      // Process any pending sync queue
+      await processSyncQueue();
+      lastSyncRef.current = new Date();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to sync cross-device');
+    } finally {
+      setIsSaving(false);
+    }
+  }, [isOffline, fetchProgress, progress, saveToStorage, saveProgressToServer, processSyncQueue]);
 
   // Get activity state
   const getActivityState = useCallback((): ActivityState => {
@@ -511,6 +601,7 @@ export const useActivityProgress = ({
     completeActivity,
     resetProgress,
     syncWithServer,
+    syncCrossDevice,
     
     // Utilities
     getActivityState,
