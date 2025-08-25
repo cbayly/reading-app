@@ -105,7 +105,7 @@
   - [x] 3.13 Write comprehensive unit tests for all enhanced activity components [AI: GPT-4o]
 
 - [ ] 4.0 Activity Progress and Persistence
-  - [ ] 4.1 Create `useActivityProgress` hook for managing progress state and API calls [AI: GPT-4o]
+  - [x] 4.1 Create `useActivityProgress` hook for managing progress state and API calls [AI: GPT-4o]
   - [ ] 4.2 Implement cross-device progress synchronization with backend storage [AI: GPT-4o]
   - [ ] 4.3 Add automatic progress saving on activity completion and intermediate steps [AI: GPT-4o]
   - [ ] 4.4 Implement progress restoration when students return to activities [AI: GPT-4o]
