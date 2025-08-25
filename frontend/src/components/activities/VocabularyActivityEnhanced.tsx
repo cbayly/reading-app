@@ -129,15 +129,58 @@ const VocabularyActivityEnhanced: React.FC<VocabularyActivityEnhancedProps> = ({
 
   const isAllMatched = matchedWordIds.size > 0 && matchedWordIds.size === wordBank.length;
 
-  const handleSelectWord = useCallback((wordId: string) => {
-    if (disabled) return;
-    setSelectedWordId(prev => (prev === wordId ? null : wordId));
-  }, [disabled]);
+  const handleWordSelect = useCallback((wordId: string) => {
+    if (disabled || matchedWordIds.has(wordId)) return;
+    
+    setSelectedWordId(wordId);
+    setSelectedDefinitionId(null);
+    
+    // Update progress when student selects a word (intermediate step)
+    const timeSpent = Math.floor((Date.now() - startTime) / 1000);
+    onProgressUpdate?.('vocabulary', 'in_progress', timeSpent);
+  }, [disabled, matchedWordIds, startTime, onProgressUpdate]);
 
-  const handleSelectDefinition = useCallback((defId: string) => {
-    if (disabled) return;
-    setSelectedDefinitionId(prev => (prev === defId ? null : defId));
-  }, [disabled]);
+  const handleDefinitionSelect = useCallback((defId: string) => {
+    if (disabled || matchedDefIds.has(defId) || !selectedWordId) return;
+    
+    setSelectedDefinitionId(defId);
+    
+    // Check if this is a correct match
+    const word = wordBank.find(w => w.id === selectedWordId);
+    const def = definitionBank.find(d => d.id === defId);
+    const isCorrect = word && def && word.word === def.word;
+
+    const immediateFeedback: ActivityFeedback = {
+      isCorrect,
+      score: isCorrect ? 100 : 0,
+      feedback: isCorrect
+        ? `Nice! "${word?.word}" matches its definition.`
+        : `Not quite. That definition does not match "${word?.word}".`,
+      suggestions: isCorrect ? undefined : [
+        'Re-read the context sentence for the word.',
+        'Look for key clues that align with the word meaning.'
+      ],
+      nextSteps: isCorrect ? ['Match the remaining words.'] : ['Try another definition.']
+    };
+    setFeedback(immediateFeedback);
+    setShowFeedback(true);
+    setTimeout(() => setShowFeedback(false), 2500);
+
+    if (isCorrect) {
+      setMatches(prev => ({ ...prev, [selectedWordId]: defId }));
+      setMatchedWordIds(prev => new Set([...Array.from(prev), selectedWordId]));
+      setMatchedDefIds(prev => new Set([...Array.from(prev), defId]));
+      setSelectedWordId(null);
+      setSelectedDefinitionId(null);
+    } else {
+      // Keep word selected to let the user try a different definition
+      setSelectedDefinitionId(null);
+    }
+    
+    // Update progress when student makes a match attempt (intermediate step)
+    const timeSpent = Math.floor((Date.now() - startTime) / 1000);
+    onProgressUpdate?.('vocabulary', 'in_progress', timeSpent);
+  }, [selectedWordId, selectedDefinitionId, wordBank, definitionBank, disabled, matchedDefIds, startTime, onProgressUpdate]);
 
   // When both a word and a definition are selected, attempt a match
   useEffect(() => {
@@ -352,11 +395,11 @@ const VocabularyActivityEnhanced: React.FC<VocabularyActivityEnhancedProps> = ({
                 aria-label={`Word: ${w.word}${matchedWordIds.has(w.id) ? ' (matched)' : selectedWordId === w.id ? ' (selected)' : ''}`}
                 draggable={interactionPattern.dragPattern !== 'touchDrag' && !matchedWordIds.has(w.id) && !disabled}
                 onDragStart={(e) => onWordDragStart(e, w.id)}
-                onClick={() => handleSelectWord(w.id)}
+                onClick={() => handleWordSelect(w.id)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    handleSelectWord(w.id);
+                    handleWordSelect(w.id);
                   }
                 }}
               >
@@ -384,11 +427,11 @@ const VocabularyActivityEnhanced: React.FC<VocabularyActivityEnhancedProps> = ({
                   role="button"
                   tabIndex={disabled ? -1 : 0}
                   aria-label={`Definition: ${d.definition}${matched ? ' (matched)' : selected ? ' (selected)' : ''}`}
-                  onClick={() => handleSelectDefinition(d.id)}
+                  onClick={() => handleDefinitionSelect(d.id)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
-                      handleSelectDefinition(d.id);
+                      handleDefinitionSelect(d.id);
                     }
                   }}
                   onDragOver={onDefinitionDragOver}

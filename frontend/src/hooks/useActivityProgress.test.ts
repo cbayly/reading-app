@@ -408,10 +408,23 @@ describe('useActivityProgress', () => {
         completedAt: new Date('2023-01-01T11:00:00Z'),
       };
 
-      // Mock server response
+      // Mock server response for GET call (fetch progress) - return 404 so local progress is used
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+      });
+
+      // Mock server response for POST call (save progress)
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({ progress: { who: serverProgress } }),
+        json: () => Promise.resolve({ success: true }),
+      });
+
+      // Mock server response for third call (likely from processSyncQueue)
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ success: true }),
       });
 
       // Mock localStorage to return local progress
@@ -425,17 +438,26 @@ describe('useActivityProgress', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
+      // Ensure local progress is loaded
+      expect(result.current.progress?.status).toBe('completed');
+
       // Trigger cross-device sync
       await act(async () => {
         await result.current.syncCrossDevice();
       });
 
+      // Should make GET call to fetch progress first
+      expect(mockFetch).toHaveBeenCalledWith('/api/enhanced-activities/progress/student123/plan456/1');
+      
       // Should push local progress to server since it's more recent
       expect(mockFetch).toHaveBeenCalledWith('/api/enhanced-activities/progress', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: expect.stringContaining('"status":"completed"'),
       });
+
+      // Verify that exactly 3 fetch calls were made (GET + POST + sync queue)
+      expect(mockFetch).toHaveBeenCalledTimes(3);
     });
 
     it('should handle sync when no local progress exists', async () => {

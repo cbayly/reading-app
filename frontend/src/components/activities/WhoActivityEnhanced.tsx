@@ -104,7 +104,11 @@ const WhoActivityEnhanced: React.FC<WhoActivityEnhancedProps> = ({
       
       return newSelection;
     });
-  }, [disabled, allCharacters]);
+
+    // Update progress when student makes a selection (intermediate step)
+    const timeSpent = Math.floor((Date.now() - startTime) / 1000);
+    onProgressUpdate?.('who', 'in_progress', timeSpent);
+  }, [disabled, allCharacters, startTime, onProgressUpdate]);
 
   const handleDragStart = (e: React.DragEvent, characterId: string) => {
     if (interactionPattern.dragPattern === 'touchDrag') return; // Disable drag on touch-only devices

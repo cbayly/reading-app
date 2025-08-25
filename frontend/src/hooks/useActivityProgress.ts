@@ -335,14 +335,26 @@ export const useActivityProgress = ({
     autoSaveTimeoutRef.current = setTimeout(() => {
       saveToStorage(progress);
       setHasUnsavedChanges(false);
-    }, 2000); // Auto-save after 2 seconds of inactivity
+      
+      // Also try to save to server immediately for important changes
+      if (!isOffline) {
+        saveProgressToServer(progress).catch(() => {
+          // If server save fails, add to sync queue
+          if (offlineFallback) {
+            addToSyncQueue('update', progress);
+          }
+        });
+      } else if (offlineFallback) {
+        addToSyncQueue('update', progress);
+      }
+    }, 1000); // Reduced from 2 seconds to 1 second for more responsive saving
     
     return () => {
       if (autoSaveTimeoutRef.current) {
         clearTimeout(autoSaveTimeoutRef.current);
       }
     };
-  }, [progress, hasUnsavedChanges, autoSave, saveToStorage]);
+  }, [progress, hasUnsavedChanges, autoSave, saveToStorage, isOffline, offlineFallback, saveProgressToServer, addToSyncQueue]);
 
   // Network status monitoring
   useEffect(() => {
@@ -370,7 +382,7 @@ export const useActivityProgress = ({
 
 
 
-  // Update progress status
+  // Update progress status with immediate saving
   const updateProgress = useCallback(async (status: ActivityProgress['status'], timeSpent?: number) => {
     if (!progress) return;
     
@@ -388,7 +400,7 @@ export const useActivityProgress = ({
     // Save to localStorage immediately
     saveToStorage(updatedProgress);
     
-    // Try to save to server
+    // Try to save to server immediately for status changes
     if (!isOffline) {
       const success = await saveProgressToServer(updatedProgress);
       if (!success && offlineFallback) {
@@ -399,7 +411,7 @@ export const useActivityProgress = ({
     }
   }, [progress, isOffline, offlineFallback, saveToStorage, saveProgressToServer, addToSyncQueue]);
 
-  // Save individual response
+  // Save individual response with immediate saving
   const saveResponse = useCallback(async (response: ActivityResponse) => {
     if (!progress) return;
     
@@ -415,7 +427,7 @@ export const useActivityProgress = ({
     // Save to localStorage immediately
     saveToStorage(updatedProgress);
     
-    // Try to save to server
+    // Try to save to server immediately for response saves
     if (!isOffline) {
       const success = await saveProgressToServer(updatedProgress);
       if (!success && offlineFallback) {
@@ -426,7 +438,7 @@ export const useActivityProgress = ({
     }
   }, [progress, isOffline, offlineFallback, saveToStorage, saveProgressToServer, addToSyncQueue]);
 
-  // Complete activity
+  // Complete activity with immediate saving
   const completeActivity = useCallback(async (responses: ActivityResponse[], timeSpent: number) => {
     if (!progress) return;
     
@@ -445,7 +457,7 @@ export const useActivityProgress = ({
     // Save to localStorage immediately
     saveToStorage(updatedProgress);
     
-    // Try to save to server
+    // Try to save to server immediately for completion
     if (!isOffline) {
       const success = await saveProgressToServer(updatedProgress);
       if (!success && offlineFallback) {

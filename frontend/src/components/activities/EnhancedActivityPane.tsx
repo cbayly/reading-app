@@ -64,8 +64,16 @@ const EnhancedActivityPane: React.FC<EnhancedActivityPaneProps> = ({
     onCompleteActivity?.(activityType, answers, responses);
   }, [onCompleteActivity, completeActivity, studentId]);
 
+  // Enhanced progress update handler that automatically saves progress
+  const handleProgressUpdate = useCallback((activityType: string, status: 'in_progress' | 'completed', timeSpent?: number) => {
+    if (studentId) {
+      updateProgress(status, timeSpent).catch(() => {});
+    }
+  }, [studentId, updateProgress]);
+
   useEffect(() => {
     if (!studentId || !step) return;
+    // Automatically mark activity as in progress when it becomes active
     updateProgress('in_progress').catch(() => {});
   }, [studentId, step?.type, updateProgress, step]);
 
@@ -96,7 +104,7 @@ const EnhancedActivityPane: React.FC<EnhancedActivityPaneProps> = ({
             content={{ type: 'who', content: activities.who! }}
             progress={progress.who}
             onComplete={handleComplete}
-            onProgressUpdate={() => {}}
+            onProgressUpdate={handleProgressUpdate}
             onJumpToContext={onJumpToContext}
           />
         );
@@ -106,7 +114,7 @@ const EnhancedActivityPane: React.FC<EnhancedActivityPaneProps> = ({
             content={{ type: 'where', content: activities.where! }}
             progress={progress.where}
             onComplete={handleComplete}
-            onProgressUpdate={() => {}}
+            onProgressUpdate={handleProgressUpdate}
             onJumpToContext={onJumpToContext}
           />
         );
@@ -116,7 +124,7 @@ const EnhancedActivityPane: React.FC<EnhancedActivityPaneProps> = ({
             content={{ type: 'sequence', content: activities.sequence! }}
             progress={progress.sequence}
             onComplete={handleComplete}
-            onProgressUpdate={() => {}}
+            onProgressUpdate={handleProgressUpdate}
             onJumpToContext={onJumpToContext}
           />
         );
@@ -126,7 +134,7 @@ const EnhancedActivityPane: React.FC<EnhancedActivityPaneProps> = ({
             content={{ type: 'main-idea', content: activities['main-idea']! }}
             progress={progress['main-idea']}
             onComplete={handleComplete}
-            onProgressUpdate={() => {}}
+            onProgressUpdate={handleProgressUpdate}
             onJumpToContext={onJumpToContext}
           />
         );
@@ -136,7 +144,7 @@ const EnhancedActivityPane: React.FC<EnhancedActivityPaneProps> = ({
             content={{ type: 'vocabulary', content: activities.vocabulary! }}
             progress={progress.vocabulary}
             onComplete={handleComplete}
-            onProgressUpdate={() => {}}
+            onProgressUpdate={handleProgressUpdate}
             onJumpToContext={onJumpToContext}
           />
         );
@@ -146,7 +154,7 @@ const EnhancedActivityPane: React.FC<EnhancedActivityPaneProps> = ({
             content={{ type: 'predict', content: activities.predict! }}
             progress={progress.predict}
             onComplete={handleComplete}
-            onProgressUpdate={() => {}}
+            onProgressUpdate={handleProgressUpdate}
             onJumpToContext={onJumpToContext}
           />
         );

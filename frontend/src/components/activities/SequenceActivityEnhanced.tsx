@@ -134,7 +134,11 @@ const SequenceActivityEnhanced: React.FC<SequenceActivityEnhancedProps> = ({
       
       return newOrder;
     });
-  }, []);
+    
+    // Update progress when student reorders events (intermediate step)
+    const timeSpent = Math.floor((Date.now() - startTime) / 1000);
+    onProgressUpdate?.('sequence', 'in_progress', timeSpent);
+  }, [startTime, onProgressUpdate]);
 
   const handleTapToSwap = useCallback((eventId: string) => {
     if (disabled || interactionPattern.dragPattern !== 'touchDrag') return;
@@ -154,11 +158,15 @@ const SequenceActivityEnhanced: React.FC<SequenceActivityEnhancedProps> = ({
           [newOrder[firstIndex], newOrder[secondIndex]] = [newOrder[secondIndex], newOrder[firstIndex]];
           return newOrder;
         });
+        
+        // Update progress when student swaps events (intermediate step)
+        const timeSpent = Math.floor((Date.now() - startTime) / 1000);
+        onProgressUpdate?.('sequence', 'in_progress', timeSpent);
       }
       
       setSelectedEvent(null);
     }
-  }, [selectedEvent, orderedEvents, disabled, interactionPattern.dragPattern]);
+  }, [selectedEvent, orderedEvents, disabled, interactionPattern.dragPattern, startTime, onProgressUpdate]);
 
   const handleComplete = useCallback(() => {
     if (disabled) return;
