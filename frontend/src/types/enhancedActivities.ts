@@ -168,4 +168,7 @@ export interface ActivityState {
   timeSpent: number;
   answers: any[];
   feedback?: ActivityFeedback;
+  status: 'not_started' | 'in_progress' | 'completed';
+  canProceed: boolean;
+  isLocked: boolean;
 }

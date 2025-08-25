@@ -6,6 +6,11 @@ import { authenticate } from '../middleware/auth.js';
 const router = express.Router();
 const prisma = new PrismaClient();
 
+// Health check endpoint for connection quality testing
+router.head('/health', (req, res) => {
+  res.status(200).end();
+});
+
 // GET /api/enhanced-activities/:planId/:dayIndex
 // Fetch activity content for a specific plan and day
 router.get('/:planId/:dayIndex', authenticate, async (req, res) => {

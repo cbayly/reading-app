@@ -1,219 +1,193 @@
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
+import { ActivityProgress } from '../../../types/enhancedActivities';
 
-export interface ActivityStep {
-  id: string;
-  type: 'who' | 'where' | 'sequence' | 'main-idea' | 'vocabulary' | 'predict';
-  label: string;
-  completed?: boolean;
-  accessible?: boolean;
+interface ActivityStep {
+  type: string;
+  title: string;
+  description: string;
+  isCompleted: boolean;
+  isCurrent: boolean;
+  isLocked: boolean;
+  timeSpent?: number;
+  attempts?: number;
+  score?: number;
+  lastAttempt?: Date;
 }
 
-export interface ActivityStepperProps {
+interface ActivityStepperProps {
   steps: ActivityStep[];
   currentIndex: number;
   onStepClick: (index: number) => void;
+  showProgress?: boolean;
+  showTimeSpent?: boolean;
+  showAttempts?: boolean;
+  showScores?: boolean;
   className?: string;
-  'aria-label'?: string;
 }
 
-const ActivityStepper: React.FC<ActivityStepperProps> = ({
+export const ActivityStepper: React.FC<ActivityStepperProps> = ({
   steps,
   currentIndex,
   onStepClick,
-  className = '',
-  'aria-label': ariaLabel = 'Activity navigation'
+  showProgress = true,
+  showTimeSpent = true,
+  showAttempts = true,
+  showScores = true,
+  className = ''
 }) => {
-  const stepRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const completedCount = steps.filter(step => step.isCompleted).length;
+  const totalProgress = steps.length > 0 ? (completedCount / steps.length) * 100 : 0;
 
-  // Focus management for keyboard navigation
-  useEffect(() => {
-    if (stepRefs.current[currentIndex]) {
-      stepRefs.current[currentIndex]?.focus();
+  const formatTime = (seconds?: number) => {
+    if (!seconds) return '0s';
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return minutes > 0 ? `${minutes}m ${remainingSeconds}s` : `${remainingSeconds}s`;
+  };
+
+  const getStepIcon = (step: ActivityStep) => {
+    if (step.isLocked) {
+      return (
+        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+        </svg>
+      );
     }
-  }, [currentIndex]);
-
-  const getActivityTypeIcon = (type: string) => {
-    const icons = {
-      who: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+    
+    if (step.isCompleted) {
+      return (
+        <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
         </svg>
-      ),
-      where: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+      );
+    }
+    
+    if (step.isCurrent) {
+      return (
+        <svg className="w-5 h-5 text-blue-500 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
         </svg>
-      ),
-      sequence: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
-        </svg>
-      ),
-      'main-idea': (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
-        </svg>
-      ),
-      vocabulary: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
-        </svg>
-      ),
-      predict: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-        </svg>
-      )
-    };
-    return icons[type as keyof typeof icons] || (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      );
+    }
+    
+    return (
+      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
       </svg>
     );
   };
 
-  const handleKeyDown = (event: React.KeyboardEvent, index: number) => {
-    switch (event.key) {
-      case 'ArrowLeft':
-        event.preventDefault();
-        if (index > 0) {
-          onStepClick(index - 1);
-        }
-        break;
-      case 'ArrowRight':
-        event.preventDefault();
-        if (index < steps.length - 1) {
-          onStepClick(index + 1);
-        }
-        break;
-      case 'Home':
-        event.preventDefault();
-        onStepClick(0);
-        break;
-      case 'End':
-        event.preventDefault();
-        onStepClick(steps.length - 1);
-        break;
-      case 'Enter':
-      case ' ':
-        event.preventDefault();
-        onStepClick(index);
-        break;
-    }
-  };
-
-  if (!steps || steps.length === 0) {
-    return null;
-  }
-
   return (
-    <div className={`mb-6 ${className}`}>
-      <div 
-        className="grid grid-cols-6 gap-4 sm:gap-6 max-w-4xl mx-auto" 
-        role="tablist" 
-        aria-label={ariaLabel}
-      >
-        {steps.map((step, index) => {
-          const isCompleted = step.completed;
-          const isCurrent = index === currentIndex;
-          const isAccessible = step.accessible !== false;
-          
-          return (
-            <button
-              key={step.id}
-              ref={(el) => (stepRefs.current[index] = el)}
-              onClick={() => isAccessible && onStepClick(index)}
-              disabled={!isAccessible}
-              onKeyDown={(e) => handleKeyDown(e, index)}
-              className={`
-                inline-grid w-full justify-items-center text-center focus-ring
-                transition-all duration-200
-                ${isAccessible ? 'cursor-pointer' : 'cursor-not-allowed'}
-              `}
-              role="tab"
-              aria-selected={isCurrent}
-              aria-label={`${step.label} activity ${index + 1}${isCompleted ? ' completed' : ''}`}
-              title={`${step.label} activity ${index + 1}`}
-              tabIndex={isCurrent ? 0 : -1}
-            >
-              {/* Icon circle */}
-              <div 
-                className={`
-                  grid place-items-center h-12 w-12 rounded-full border-2 
-                  transition-all duration-200 focus:ring-2 focus:ring-offset-2
-                  ${isCurrent 
-                    ? 'border-blue-500 bg-blue-500 text-white shadow-lg focus:ring-blue-300' 
-                    : isCompleted 
-                      ? 'border-green-500 bg-green-500 text-white focus:ring-green-300' 
-                      : isAccessible 
-                        ? 'border-gray-300 bg-white text-gray-600 hover:border-gray-400 focus:ring-gray-300' 
-                        : 'border-gray-200 bg-gray-100 text-gray-400'
-                  }
-                `}
-              >
-                {isCompleted ? (
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-                  </svg>
-                ) : (
-                  getActivityTypeIcon(step.type)
-                )}
-              </div>
-              
-              {/* Label */}
-              <span 
-                className={`
-                  mt-2 text-xs font-medium leading-5 transition-colors
-                  ${isCurrent 
-                    ? 'text-blue-600' 
-                    : isCompleted 
-                      ? 'text-green-600' 
-                      : 'text-gray-500'
-                  }
-                `}
-              >
-                {step.label}
-              </span>
-              
-              {/* Step number */}
-              <span 
-                className={`
-                  mt-1 text-xs transition-colors
-                  ${isCurrent 
-                    ? 'text-blue-600' 
-                    : isCompleted 
-                      ? 'text-green-600' 
-                      : 'text-gray-400'
-                  }
-                `}
-              >
-                {index + 1}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-      
-      {/* Progress bar */}
-      <div className="mt-4 max-w-4xl mx-auto">
-        <div className="relative">
-          <div className="overflow-hidden h-2 text-xs flex rounded bg-gray-200">
+    <div className={`space-y-4 ${className}`}>
+      {/* Overall Progress Bar */}
+      {showProgress && (
+        <div className="bg-gray-100 rounded-lg p-4">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-sm font-medium text-gray-700">Overall Progress</span>
+            <span className="text-sm text-gray-500">{completedCount} of {steps.length} completed</span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2">
             <div 
-              className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-blue-500 transition-all duration-500 ease-out"
-              style={{ 
-                width: `${((currentIndex + 1) / steps.length) * 100}%` 
-              }}
+              className="bg-blue-600 h-2 rounded-full transition-all duration-300 ease-out"
+              style={{ width: `${totalProgress}%` }}
             />
           </div>
+          <div className="mt-2 text-xs text-gray-500">
+            {totalProgress.toFixed(0)}% complete
+          </div>
         </div>
-        <div className="flex justify-between text-xs text-gray-500 mt-1">
-          <span>Progress</span>
-          <span>{currentIndex + 1} of {steps.length}</span>
-        </div>
+      )}
+
+      {/* Activity Steps */}
+      <div className="space-y-3">
+        {steps.map((step, index) => (
+          <div
+            key={index}
+            className={`relative p-4 rounded-lg border transition-all duration-200 cursor-pointer ${
+              step.isCurrent 
+                ? 'border-blue-300 bg-blue-50 shadow-sm' 
+                : step.isCompleted 
+                ? 'border-green-200 bg-green-50' 
+                : step.isLocked
+                ? 'border-gray-200 bg-gray-50 cursor-not-allowed'
+                : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
+            }`}
+            onClick={() => !step.isLocked && onStepClick(index)}
+          >
+            <div className="flex items-start space-x-3">
+              {/* Step Icon */}
+              <div className="flex-shrink-0 mt-0.5">
+                {getStepIcon(step)}
+              </div>
+
+              {/* Step Content */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between">
+                  <h3 className={`text-sm font-medium ${
+                    step.isCompleted ? 'text-green-800' : 
+                    step.isCurrent ? 'text-blue-800' : 
+                    step.isLocked ? 'text-gray-500' : 'text-gray-900'
+                  }`}>
+                    {step.title}
+                  </h3>
+                  {step.isCurrent && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                      Current
+                    </span>
+                  )}
+                </div>
+                
+                <p className={`text-sm mt-1 ${
+                  step.isCompleted ? 'text-green-600' : 
+                  step.isCurrent ? 'text-blue-600' : 
+                  step.isLocked ? 'text-gray-400' : 'text-gray-500'
+                }`}>
+                  {step.description}
+                </p>
+
+                {/* Progress Details */}
+                <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500">
+                  {showTimeSpent && step.timeSpent !== undefined && (
+                    <span className="flex items-center">
+                      <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                      </svg>
+                      {formatTime(step.timeSpent)}
+                    </span>
+                  )}
+                  
+                  {showAttempts && step.attempts !== undefined && (
+                    <span className="flex items-center">
+                      <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                      </svg>
+                      {step.attempts} attempt{step.attempts !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                  
+                  {showScores && step.score !== undefined && (
+                    <span className="flex items-center">
+                      <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                      </svg>
+                      {step.score}%
+                    </span>
+                  )}
+                  
+                  {step.lastAttempt && (
+                    <span className="flex items-center">
+                      <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                      </svg>
+                      {step.lastAttempt.toLocaleDateString()}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
 };
-
-export default ActivityStepper;

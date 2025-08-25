@@ -17,8 +17,8 @@ interface UseActivityProgressReturn {
   error: string | null;
   isSaving: boolean;
   lastSaved: Date | null;
-  isRestoring: boolean; // New: indicates if progress is being restored
-  restoredFrom: 'server' | 'local' | 'none'; // New: indicates where progress was restored from
+  isRestoring: boolean;
+  restoredFrom: 'server' | 'local' | 'none';
   
   // Actions
   updateProgress: (status: ActivityProgress['status'], timeSpent?: number) => Promise<void>;
@@ -27,13 +27,23 @@ interface UseActivityProgressReturn {
   resetProgress: () => Promise<void>;
   syncWithServer: () => Promise<void>;
   syncCrossDevice: () => Promise<void>;
-  restoreProgress: () => Promise<void>; // New: explicit progress restoration
+  restoreProgress: () => Promise<void>;
+  forceSync: () => Promise<void>;
+  
+  // Answer persistence and review
+  getAnswerHistory: () => ActivityResponse[]; // New: get all answers for review
+  getLastAnswer: () => ActivityResponse | null; // New: get most recent answer
+  getAnswersByType: (type: string) => ActivityResponse[]; // New: get answers by question type
+  exportAnswers: () => string; // New: export answers for review/analysis
   
   // Utilities
   getActivityState: () => ActivityState;
   hasUnsavedChanges: boolean;
   isOffline: boolean;
-  canRestore: boolean; // New: indicates if progress can be restored
+  canRestore: boolean;
+  connectionQuality: 'excellent' | 'good' | 'poor' | 'offline';
+  pendingSyncCount: number;
+  lastSyncAttempt: Date | null;
 }
 
 const STORAGE_KEY_PREFIX = 'activity_progress_';
@@ -63,10 +73,14 @@ export const useActivityProgress = ({
   const [isOffline, setIsOffline] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [restoredFrom, setRestoredFrom] = useState<'server' | 'local' | 'none'>('none');
+  const [connectionQuality, setConnectionQuality] = useState<'excellent' | 'good' | 'poor' | 'offline'>('offline');
+  const [pendingSyncCount, setPendingSyncCount] = useState(0);
+  const [lastSyncAttempt, setLastSyncAttempt] = useState<Date | null>(null);
   
   const syncQueueRef = useRef<SyncQueueItem[]>([]);
   const lastSyncRef = useRef<Date | null>(null);
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const connectionTestRef = useRef<NodeJS.Timeout | null>(null);
 
   // Generate storage keys
   const storageKey = `${STORAGE_KEY_PREFIX}${studentId}_${planId}_${dayIndex}_${activityType}`;
@@ -215,13 +229,62 @@ export const useActivityProgress = ({
     };
     
     syncQueueRef.current.push(queueItem);
+    setPendingSyncCount(syncQueueRef.current.length);
     saveSyncQueue();
   }, [saveSyncQueue]);
 
-  // Process sync queue
+  // Test connection quality
+  const testConnectionQuality = useCallback(async (): Promise<'excellent' | 'good' | 'poor' | 'offline'> => {
+    if (!navigator.onLine) {
+      return 'offline';
+    }
+
+    try {
+      const startTime = Date.now();
+      const response = await fetch('/api/enhanced-activities/health', {
+        method: 'HEAD',
+        cache: 'no-cache'
+      });
+      const endTime = Date.now();
+      const latency = endTime - startTime;
+
+      if (!response.ok) {
+        return 'poor';
+      }
+
+      if (latency < 200) return 'excellent';
+      if (latency < 1000) return 'good';
+      return 'poor';
+    } catch (err) {
+      return 'offline';
+    }
+  }, []);
+
+  // Monitor connection quality
+  useEffect(() => {
+    const updateConnectionQuality = async () => {
+      const quality = await testConnectionQuality();
+      setConnectionQuality(quality);
+    };
+
+    // Test immediately
+    updateConnectionQuality();
+
+    // Set up periodic testing
+    connectionTestRef.current = setInterval(updateConnectionQuality, 30000); // Test every 30 seconds
+
+    return () => {
+      if (connectionTestRef.current) {
+        clearInterval(connectionTestRef.current);
+      }
+    };
+  }, [testConnectionQuality]);
+
+  // Process sync queue with enhanced error handling
   const processSyncQueue = useCallback(async () => {
     if (syncQueueRef.current.length === 0) return;
     
+    setLastSyncAttempt(new Date());
     const queue = [...syncQueueRef.current];
     const successfulItems: string[] = [];
     
@@ -263,8 +326,41 @@ export const useActivityProgress = ({
     
     // Remove successful items from queue
     syncQueueRef.current = syncQueueRef.current.filter(item => !successfulItems.includes(item.id));
+    setPendingSyncCount(syncQueueRef.current.length);
     saveSyncQueue();
   }, [saveProgressToServer, saveSyncQueue, studentId, planId, dayIndex, activityType]);
+
+  // Enhanced network status monitoring
+  useEffect(() => {
+    const handleOnline = async () => {
+      setIsOffline(false);
+      const quality = await testConnectionQuality();
+      setConnectionQuality(quality);
+      
+      // Process sync queue when coming back online with good connection
+      if (quality !== 'offline' && quality !== 'poor') {
+        setTimeout(() => {
+          processSyncQueue();
+        }, 1000); // Small delay to ensure connection is stable
+      }
+    };
+    
+    const handleOffline = () => {
+      setIsOffline(true);
+      setConnectionQuality('offline');
+    };
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    // Check initial network status
+    setIsOffline(!navigator.onLine);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [processSyncQueue, testConnectionQuality]);
 
   // Initialize progress with enhanced restoration tracking
   useEffect(() => {
@@ -382,35 +478,71 @@ export const useActivityProgress = ({
     };
   }, [progress, hasUnsavedChanges, autoSave, saveToStorage, isOffline, offlineFallback, saveProgressToServer, addToSyncQueue]);
 
-  // Network status monitoring
-  useEffect(() => {
-    const handleOnline = () => {
-      setIsOffline(false);
-      // Process sync queue when coming back online
-      processSyncQueue();
+  // Enhanced activity state tracking
+  const getActivityState = useCallback((): ActivityState => {
+    if (!progress) {
+      return {
+        isLoading,
+        error: error || undefined,
+        isCompleted: false,
+        currentAttempt: 0,
+        timeSpent: 0,
+        answers: [],
+        status: 'not_started',
+        canProceed: false,
+        isLocked: false
+      };
+    }
+    
+    const lastResponse = progress.responses[progress.responses.length - 1];
+    const feedback = lastResponse ? {
+      isCorrect: lastResponse.isCorrect || false,
+      score: lastResponse.score || 0,
+      feedback: lastResponse.feedback || '',
+    } : undefined;
+    
+    // Determine if activity can proceed based on status and responses
+    const canProceed = progress.status === 'completed' || 
+                      (progress.status === 'in_progress' && progress.responses.length > 0);
+    
+    // Determine if activity is locked (e.g., too many attempts, time limit exceeded)
+    const isLocked = progress.attempts >= 5 || // Lock after 5 attempts
+                     (progress.timeSpent ? progress.timeSpent > 3600 : false); // Lock after 1 hour
+    
+    return {
+      isLoading,
+      error: error || undefined,
+      isCompleted: progress.status === 'completed',
+      currentAttempt: progress.attempts,
+      timeSpent: progress.timeSpent || 0,
+      answers: progress.responses.map(r => r.answer),
+      feedback,
+      status: progress.status,
+      canProceed,
+      isLocked
+    };
+  }, [progress, isLoading, error]);
+
+  // Validate activity state transitions
+  const validateStateTransition = useCallback((fromStatus: string, toStatus: string): boolean => {
+    const validTransitions: Record<string, string[]> = {
+      'not_started': ['in_progress'],
+      'in_progress': ['completed', 'not_started'], // Allow reset
+      'completed': ['not_started'] // Allow reset
     };
     
-    const handleOffline = () => {
-      setIsOffline(true);
-    };
-    
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    
-    // Check initial network status
-    setIsOffline(!navigator.onLine);
-    
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, [processSyncQueue]);
+    return validTransitions[fromStatus]?.includes(toStatus) || false;
+  }, []);
 
-
-
-  // Update progress status with immediate saving
+  // Enhanced progress update with state validation
   const updateProgress = useCallback(async (status: ActivityProgress['status'], timeSpent?: number) => {
     if (!progress) return;
+    
+    // Validate state transition
+    if (!validateStateTransition(progress.status, status)) {
+      console.warn(`Invalid state transition from ${progress.status} to ${status}`);
+      return;
+    }
     
     const updatedProgress: ActivityProgress = {
       ...progress,
@@ -435,7 +567,7 @@ export const useActivityProgress = ({
     } else if (offlineFallback) {
       addToSyncQueue('update', updatedProgress);
     }
-  }, [progress, isOffline, offlineFallback, saveToStorage, saveProgressToServer, addToSyncQueue]);
+  }, [progress, isOffline, offlineFallback, saveToStorage, saveProgressToServer, addToSyncQueue, validateStateTransition]);
 
   // Save individual response with immediate saving
   const saveResponse = useCallback(async (response: ActivityResponse) => {
@@ -594,37 +726,6 @@ export const useActivityProgress = ({
     }
   }, [isOffline, fetchProgress, progress, saveToStorage, saveProgressToServer, processSyncQueue]);
 
-  // Get activity state
-  const getActivityState = useCallback((): ActivityState => {
-    if (!progress) {
-      return {
-        isLoading,
-        error: error || undefined,
-        isCompleted: false,
-        currentAttempt: 0,
-        timeSpent: 0,
-        answers: []
-      };
-    }
-    
-    const lastResponse = progress.responses[progress.responses.length - 1];
-    const feedback = lastResponse ? {
-      isCorrect: lastResponse.isCorrect || false,
-      score: lastResponse.score || 0,
-      feedback: lastResponse.feedback || '',
-    } : undefined;
-    
-    return {
-      isLoading,
-      error: error || undefined,
-      isCompleted: progress.status === 'completed',
-      currentAttempt: progress.attempts,
-      timeSpent: progress.timeSpent || 0,
-      answers: progress.responses.map(r => r.answer),
-      feedback
-    };
-  }, [progress, isLoading, error]);
-
   // Restore progress from server or local
   const restoreProgress = useCallback(async () => {
     setIsRestoring(true);
@@ -656,6 +757,37 @@ export const useActivityProgress = ({
     }
   }, [fetchProgress, loadFromStorage]);
 
+  // Force immediate sync
+  const forceSync = useCallback(async () => {
+    setIsSaving(true);
+    try {
+      await processSyncQueue();
+      lastSyncRef.current = new Date();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to force sync');
+    } finally {
+      setIsSaving(false);
+    }
+  }, [processSyncQueue]);
+
+  // Answer persistence and review
+  const getAnswerHistory = useCallback((): ActivityResponse[] => {
+    return progress?.responses || [];
+  }, [progress]);
+
+  const getLastAnswer = useCallback((): ActivityResponse | null => {
+    return progress?.responses[progress?.responses.length - 1] || null;
+  }, [progress]);
+
+  const getAnswersByType = useCallback((type: string) => {
+    return progress?.responses.filter(r => r.question.includes(type)) || [];
+  }, [progress]);
+
+  const exportAnswers = useCallback(() => {
+    if (!progress) return '';
+    return JSON.stringify(progress.responses, null, 2);
+  }, [progress]);
+
   return {
     // State
     progress,
@@ -663,8 +795,8 @@ export const useActivityProgress = ({
     error,
     isSaving,
     lastSaved,
-    isRestoring, // New: indicates if progress is being restored
-    restoredFrom, // New: indicates where progress was restored from
+    isRestoring,
+    restoredFrom,
     
     // Actions
     updateProgress,
@@ -673,12 +805,22 @@ export const useActivityProgress = ({
     resetProgress,
     syncWithServer,
     syncCrossDevice,
-    restoreProgress, // New: explicit progress restoration
+    restoreProgress,
+    forceSync,
+    
+    // Answer persistence and review
+    getAnswerHistory,
+    getLastAnswer,
+    getAnswersByType,
+    exportAnswers,
     
     // Utilities
     getActivityState,
     hasUnsavedChanges,
     isOffline,
-    canRestore: restoredFrom !== 'none' // New: indicates if progress can be restored
+    canRestore: restoredFrom !== 'none',
+    connectionQuality,
+    pendingSyncCount,
+    lastSyncAttempt
   };
 };
