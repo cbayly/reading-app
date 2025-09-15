@@ -10,16 +10,23 @@ import {
 
 interface SequenceActivityEnhancedProps extends EnhancedActivityProps {
   content: { type: 'sequence'; content: EnhancedSequenceContent };
+  studentId?: string;
+  planId?: string;
+  dayIndex?: number;
 }
 
-const SequenceActivityEnhanced: React.FC<SequenceActivityEnhancedProps> = ({
+const SequenceActivityEnhanced: React.FC<SequenceActivityEnhancedProps & { onNext?: () => void }> = ({
   content,
   progress,
   onComplete,
   onProgressUpdate,
   onJumpToContext,
   className = '',
-  disabled = false
+  disabled = false,
+  onNext,
+  studentId,
+  planId,
+  dayIndex
 }) => {
   const deviceInfo = useDeviceDetector();
   const interactionPattern = getOptimalInteractionPattern(deviceInfo);
@@ -27,6 +34,7 @@ const SequenceActivityEnhanced: React.FC<SequenceActivityEnhancedProps> = ({
   const [orderedEvents, setOrderedEvents] = useState<string[]>([]);
   const [feedback, setFeedback] = useState<ActivityFeedback | null>(null);
   const [showFeedback, setShowFeedback] = useState(false);
+  const [checks, setChecks] = useState(0);
   const [draggedEvent, setDraggedEvent] = useState<string | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<string | null>(null);
@@ -183,7 +191,7 @@ const SequenceActivityEnhanced: React.FC<SequenceActivityEnhancedProps> = ({
     }
   }, [selectedEvent, orderedEvents, disabled, interactionPattern.dragPattern, startTime, onProgressUpdate]);
 
-  const handleComplete = useCallback(() => {
+  const handleCheck = useCallback(() => {
     if (disabled) return;
 
     const timeSpent = Math.floor((Date.now() - startTime) / 1000);
@@ -202,48 +210,38 @@ const SequenceActivityEnhanced: React.FC<SequenceActivityEnhancedProps> = ({
         correctPositions++;
       }
     });
-    
     const score = Math.round((correctPositions / correctOrder.length) * 100);
     
     const finalFeedback: ActivityFeedback = {
       isCorrect,
       score,
-      feedback: isCorrect 
-        ? 'Excellent! You correctly ordered all the story events.'
-        : `You got ${correctPositions} out of ${correctOrder.length} events in the correct order.`,
-      suggestions: !isCorrect ? [
-        'Read the story carefully to understand the sequence of events.',
-        'Look for time indicators like "first", "then", "finally".',
-        'Pay attention to cause and effect relationships.'
-      ] : undefined,
-      nextSteps: isCorrect ? [
-        'Great job! You can now move on to the next activity.',
-        'Try to remember this sequence for the other activities.'
-      ] : [
-        'Review the story to understand the correct order.',
-        'Look for clues about what happens first, second, and so on.'
-      ]
+      feedback: isCorrect ? 'Correct' : 'Incorrect'
     };
 
     setFeedback(finalFeedback);
     setShowFeedback(true);
+    setChecks((c) => c + (isCorrect ? 0 : 1));
 
-    // Create responses for detailed tracking
-    const responses: ActivityResponse[] = [
-      {
-        id: `sequence-response-${Date.now()}`,
-        question: content.content.question,
-        answer: orderedEvents,
-        isCorrect,
-        feedback: finalFeedback.feedback,
-        score,
-        timeSpent,
-        createdAt: new Date()
-      }
-    ];
+    // Persist progress state
+    onProgressUpdate?.('sequence', 'in_progress', timeSpent);
 
-    onComplete('sequence', orderedEvents, responses);
-    onProgressUpdate?.('sequence', 'completed', timeSpent);
+    if (isCorrect) {
+      const responses: ActivityResponse[] = [
+        {
+          id: `sequence-response-${Date.now()}`,
+          question: content.content.question,
+          answer: orderedEvents,
+          isCorrect,
+          feedback: finalFeedback.feedback,
+          score,
+          timeSpent,
+          createdAt: new Date()
+        }
+      ];
+      onComplete('sequence', orderedEvents, responses);
+      onProgressUpdate?.('sequence', 'completed', timeSpent);
+      // small delay so students see the state, then allow Next via button label swap
+    }
   }, [disabled, orderedEvents, content, startTime, onComplete, onProgressUpdate]);
 
   const handleReset = useCallback(() => {
@@ -256,84 +254,27 @@ const SequenceActivityEnhanced: React.FC<SequenceActivityEnhancedProps> = ({
     setShowFeedback(false);
   }, [content.content.events]);
 
-  const isCompleted = progress?.status === 'completed';
+  const isCompleted = progress?.status === 'completed' || (feedback?.isCorrect ?? false);
   const isAllOrdered = orderedEvents.length === content.content.events.length;
 
   return (
-    <div className={`space-y-6 ${className}`}>
-      {/* Activity Header */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <div className="flex items-start">
-          <svg className="w-5 h-5 text-blue-600 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-          </svg>
-          <div>
-            <h4 className="text-sm font-medium text-blue-900 mb-1">How to complete this activity:</h4>
-            <ul className="text-sm text-blue-800 space-y-1">
-              {interactionPattern.dragPattern === 'touchDrag' ? (
-                <>
-                  <li>• Tap on two events to swap their positions</li>
-                  <li>• The first event you tap will be highlighted</li>
-                  <li>• Tap the second event to complete the swap</li>
-                </>
-              ) : (
-                <>
-                  <li>• Drag and drop events to put them in the correct order</li>
-                  <li>• Events should follow the story sequence from beginning to end</li>
-                </>
-              )}
-              <li>• Use the numbered indicators to help with ordering</li>
-              <li>• All events must be in order to complete the activity</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-
-      {/* Question */}
-      <div className="text-center">
-        <h3 className="text-xl font-semibold text-gray-900 mb-2">
-          {content.content.question}
+    <div className={`space-y-4 ${className}`}>
+      {/* Question header only */}
+      <div>
+        <h3 className="text-lg font-semibold text-gray-900">
+          What happened in this chapter?
         </h3>
-        <p className="text-gray-600">
-          {content.content.instructions}
-        </p>
       </div>
 
-      {/* Immediate Feedback */}
-      {showFeedback && feedback && (
-        <div className={`border rounded-lg p-4 transition-all duration-300 ${
-          feedback.isCorrect 
-            ? 'border-green-200 bg-green-50 text-green-800' 
-            : 'border-yellow-200 bg-yellow-50 text-yellow-800'
-        }`} role="status" aria-live="polite">
-          <div className="flex items-start">
-            <svg className={`w-5 h-5 mr-3 mt-0.5 flex-shrink-0 ${
-              feedback.isCorrect ? 'text-green-600' : 'text-yellow-600'
-            }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              {feedback.isCorrect ? (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-              ) : (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
-              )}
-            </svg>
-            <div>
-              <p className="font-medium">{feedback.feedback}</p>
-              {feedback.suggestions && feedback.suggestions.length > 0 && (
-                <ul className="mt-2 text-sm space-y-1">
-                  {feedback.suggestions.map((suggestion, index) => (
-                    <li key={index}>• {suggestion}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Blue instructions */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <p className="text-sm text-blue-900">Reorder the events below in the order they appear in the story.</p>
+      </div>
+
+      {/* Immediate Feedback removed per simplified flow */}
 
       {/* Event Ordering */}
       <div className="space-y-3">
-        <h4 className="text-lg font-semibold text-gray-900">Put the story events in order:</h4>
-        
         <div className="space-y-3">
           {orderedEvents.map((eventId, index) => {
             const event = content.content.events.find(e => e.id === eventId);
@@ -354,7 +295,7 @@ const SequenceActivityEnhanced: React.FC<SequenceActivityEnhancedProps> = ({
                 onDragEnd={handleDragEnd}
                 onClick={() => handleTapToSwap(eventId)}
                 className={`
-                  relative p-4 border-2 rounded-lg transition-all duration-200 focus-ring
+                  relative p-4 border rounded-lg transition-all duration-200 focus-ring
                   ${interactionPattern.dragPattern === 'touchDrag' ? 'cursor-pointer' : 'cursor-move'}
                   ${isDragging 
                     ? 'opacity-50 border-blue-400 bg-blue-50' 
@@ -378,15 +319,6 @@ const SequenceActivityEnhanced: React.FC<SequenceActivityEnhancedProps> = ({
                   }
                 }}
               >
-                {/* Order Number */}
-                <div className={`absolute top-2 left-2 w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold ${
-                  isCorrectPosition 
-                    ? 'bg-green-500 text-white' 
-                    : 'bg-blue-500 text-white'
-                }`}>
-                  {index + 1}
-                </div>
-
                 {/* Drag Handle */}
                 {interactionPattern.dragPattern !== 'touchDrag' && (
                   <div className="absolute top-2 right-2 text-gray-400 hover:text-gray-600">
@@ -408,18 +340,18 @@ const SequenceActivityEnhanced: React.FC<SequenceActivityEnhancedProps> = ({
                 )}
 
                 {/* Event Content */}
-                <div className={`${interactionPattern.dragPattern === 'touchDrag' && isSelected ? 'mr-8' : 'mr-8'} ml-8`}>
-                  <p className="text-gray-800 leading-relaxed">{event.text}</p>
+                <div className={`${interactionPattern.dragPattern === 'touchDrag' && isSelected ? 'mr-8' : 'mr-8'}`}>
+                  <p className="text-gray-800 leading-relaxed text-sm">{event.text}</p>
                 </div>
 
-                {/* Jump to Context Button */}
-                {onJumpToContext && (
+                {/* Jump to Context Button - hidden until 3rd failed attempt */}
+                {onJumpToContext && checks >= 3 && !isCompleted && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       onJumpToContext(`event-${eventId}`);
                     }}
-                    className="mt-3 ml-8 inline-flex items-center px-2 py-1 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors focus-ring"
+                    className="mt-3 inline-flex items-center px-2 py-1 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors focus-ring"
                     aria-label={`Jump to context for event ${index + 1}`}
                   >
                     <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -434,78 +366,38 @@ const SequenceActivityEnhanced: React.FC<SequenceActivityEnhancedProps> = ({
         </div>
       </div>
 
-      {/* Action Buttons */}
-      <div className="flex items-center justify-between pt-4">
-        <button
-          onClick={handleReset}
-          disabled={disabled}
-          className="px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors focus-ring font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-          aria-label="Reset event order"
-        >
-          <svg className="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-          </svg>
-          Reset Order
-        </button>
-        
-        <div className="flex items-center space-x-3">
-          {isAllOrdered && !isCompleted && (
-            <div className="flex items-center text-green-600">
-              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-              </svg>
-              <span className="text-sm font-medium">All events ordered</span>
-            </div>
+      {/* Action Buttons: Check / Next like Who/Where */}
+      <div className="flex items-center justify-between pt-1">
+        <div className="text-sm text-gray-700">
+          {feedback && feedback.isCorrect && (
+            <span className="font-semibold text-green-700">Correct</span>
           )}
-          
-          {!isCompleted && (
-            <button
-              onClick={handleComplete}
-              disabled={!isAllOrdered || disabled}
-              className={`
-                px-6 py-2 rounded-lg font-medium transition-colors focus-ring
-                ${isAllOrdered && !disabled
-                  ? 'bg-green-600 text-white hover:bg-green-700' 
-                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                }
-              `}
-              aria-label="Complete activity"
-            >
-              Complete Activity
-            </button>
+          {feedback && !feedback.isCorrect && (
+            <span className="font-semibold text-red-700">Incorrect</span>
           )}
         </div>
+        {(() => {
+          const isDisabled = !isAllOrdered && !(feedback && feedback.isCorrect);
+          const showNext = !!(feedback && feedback.isCorrect);
+          return (
+            <button
+              onClick={showNext ? onNext : handleCheck}
+              className={`rounded-lg px-4 py-2 text-sm font-semibold shadow-sm ${
+                showNext
+                  ? 'text-white bg-green-600 hover:bg-green-700'
+                  : isDisabled
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
+                  : 'text-white bg-blue-600 hover:bg-blue-700'
+              }`}
+              disabled={isDisabled}
+            >
+              {showNext ? 'Next' : 'Check'}
+            </button>
+          );
+        })()}
       </div>
 
-      {/* Final Feedback */}
-      {isCompleted && feedback && (
-        <div className="text-center py-4">
-          <div className={`inline-flex items-center px-4 py-2 rounded-full ${
-            feedback.isCorrect 
-              ? 'bg-green-100 text-green-800' 
-              : 'bg-yellow-100 text-yellow-800'
-          }`}>
-            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              {feedback.isCorrect ? (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-              ) : (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
-              )}
-            </svg>
-            {feedback.isCorrect ? 'Activity completed!' : 'Activity completed with feedback'}
-          </div>
-          {feedback.nextSteps && feedback.nextSteps.length > 0 && (
-            <div className="mt-3 text-sm text-gray-600">
-              <p className="font-medium">Next steps:</p>
-              <ul className="mt-1 space-y-1">
-                {feedback.nextSteps.map((step, index) => (
-                  <li key={index}>• {step}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
+      {/* Final feedback pill removed per request */}
     </div>
   );
 };

@@ -147,7 +147,7 @@ const ResizableSplit: React.FC<ResizableSplitProps> = ({
     >
       {/* Left Panel */}
       <div 
-        className="overflow-auto"
+        className="overflow-auto border-r border-gray-200"
         style={{ 
           width: `${leftWidth * 100}%`,
           minWidth: `${minLeftWidth}px`,
@@ -160,14 +160,14 @@ const ResizableSplit: React.FC<ResizableSplitProps> = ({
       {/* Resizable Divider */}
       <div
         className={`
-          relative flex-shrink-0 z-10 border-l border-r border-gray-400
-          ${disabled ? 'cursor-default opacity-50' : 'cursor-col-resize'}
+          relative flex-shrink-0 z-10
+          ${disabled ? 'cursor-default opacity-0' : 'cursor-col-resize opacity-0'}
           ${isDragging ? 'bg-blue-400' : 'bg-gray-300 hover:bg-gray-400'}
         `}
         style={{ 
-          width: '8px',
-          minWidth: '8px',
-          maxWidth: '8px'
+          width: '0px',
+          minWidth: '0px',
+          maxWidth: '0px'
         }}
         onMouseDown={handleMouseDown}
         onKeyDown={handleKeyDown}
@@ -179,24 +179,24 @@ const ResizableSplit: React.FC<ResizableSplitProps> = ({
         aria-valuemax={100}
         aria-orientation="vertical"
       >
-        {/* Divider handle */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        {/* Divider handle - hidden */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-0">
           <div className="w-1 h-20 bg-gray-600 rounded-full shadow-sm"></div>
         </div>
         
-        {/* Hover indicator */}
-        <div className="absolute inset-0 bg-gray-200 opacity-0 hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
+        {/* Hover indicator - hidden */}
+        <div className="absolute inset-0 bg-gray-200 opacity-0 hover:opacity-0 transition-opacity duration-200 pointer-events-none" />
         
-        {/* Focus indicator */}
-        <div className="absolute inset-0 ring-2 ring-blue-500 ring-opacity-0 focus-within:ring-opacity-100 transition-opacity duration-200 pointer-events-none" />
+        {/* Focus indicator - hidden */}
+        <div className="absolute inset-0 ring-2 ring-blue-500 ring-opacity-0 focus-within:ring-opacity-0 transition-opacity duration-200 pointer-events-none" />
         
-        {/* Drag indicator */}
+        {/* Drag indicator - hidden */}
         {isDragging && (
-          <div className="absolute inset-0 bg-blue-200 opacity-75 pointer-events-none" />
+          <div className="absolute inset-0 bg-blue-200 opacity-0 pointer-events-none" />
         )}
         
-        {/* Debug info */}
-        <div className="absolute top-1 left-1 text-xs text-gray-500 pointer-events-none">
+        {/* Debug info - hidden */}
+        <div className="absolute top-1 left-1 text-xs text-gray-500 pointer-events-none opacity-0">
           {Math.round(value * 100)}%
         </div>
       </div>

@@ -2,6 +2,10 @@
 // to generate reading passages and questions for assessments.
 
 import OpenAI from 'openai';
+import dotenv from 'dotenv';
+// Ensure environment variables are loaded even if this module is imported
+// before the main server file initializes dotenv
+dotenv.config();
 import { PrismaClient } from '@prisma/client';
 import { 
   logAIRequestWithCapture, 
@@ -141,6 +145,24 @@ function constructPrompt(student, selectedInterest, adjustedGradeLevel) {
     - 4 comprehension questions (e.g., main idea, inference, detail retrieval).
     - 4 vocabulary questions about specific words in the story. For vocabulary questions, include the sentence or phrase from the passage that contains the vocabulary word in the "context" field.
 
+    VOCABULARY QUESTION REQUIREMENTS:
+    - Choose 4 different vocabulary words that appear in the story
+    - Each word should be challenging but appropriate for grade ${adjustedGradeLevel}
+    - Generate 4 multiple-choice options (A, B, C, D) for each vocabulary question
+    - The correct answer should be a clear, educational definition
+    - All options must be complete sentences ending with periods
+    - NEVER use the target word in its own definition
+    - Avoid circular or overly simple definitions
+    - Ensure definitions are age-appropriate and educational
+    - Each vocabulary word should appear only once across all questions
+
+    VOCABULARY DEFINITION EXAMPLES:
+    GOOD: "Having a lot of light or being very colorful and cheerful."
+    BAD: "Something that is bright." (circular definition)
+    
+    GOOD: "Food that tastes very good and is enjoyable to eat."
+    BAD: "A type of food that people eat." (too generic)
+
     Return the entire response as a single, valid JSON object. Do not include any text or markdown formatting outside of the JSON object.
     The "options" array should contain four strings with the option text only, without any prefixes like "A.", "B.", etc.
     For vocabulary questions, include a "context" field with the sentence or phrase from the passage that contains the vocabulary word.
@@ -152,11 +174,13 @@ function constructPrompt(student, selectedInterest, adjustedGradeLevel) {
           "type": "comprehension" or "vocabulary",
           "text": "The full question text (e.g., 'What did the main character do first?')",
           "options": ["Just the text for option A", "Just the text for option B", "Just the text for option C", "Just the text for option D"],
-          "correctAnswer": "A",
+          "correctAnswer": "A" or "B" or "C" or "D",
           "context": "For vocabulary questions, include the relevant sentence or phrase from the passage"
         }
       ]
     }
+    
+    IMPORTANT: Randomize the correct answer positions across all questions. Do not put all correct answers in the same position (A, B, C, or D). Mix them up so that correct answers appear in different positions throughout the assessment.
     
     IMPORTANT: Make sure each question has a clear, complete question text in the "text" field. The question should be a full sentence that asks what the student needs to answer.
   `;
@@ -313,6 +337,12 @@ You are an expert children's storyteller creating a 3-chapter story for a ${stud
 
 🚨 CRITICAL REQUIREMENTS - READ CAREFULLY 🚨
 
+🚫 AGE MENTION RESTRICTIONS:
+- NEVER explicitly state any character's age in the story text
+- Do not use phrases like "X years old", "age X", "X-year-old", etc.
+- Characters should be age-appropriate but their exact age should remain unstated
+- Focus on character behavior and maturity level rather than specific ages
+
 📏 LENGTH REQUIREMENTS (NON-NEGOTIABLE):
 - Each chapter MUST be EXACTLY 300-500 words (MINIMUM 300 words)
 - Count every word carefully before submitting
@@ -349,9 +379,10 @@ ${genreCombination ? `🎭 GENRE STYLE REQUIREMENTS:
 - Chapter 3: Resolve the ${interest}-based problem with a satisfying ending (300-500 words)
 
 👤 CHARACTER REQUIREMENTS:
-- Protagonist should be ${studentAge}-${studentAge + 2} years old
+- Protagonist should be a child/young person around the student's age (but do NOT explicitly state the character's age)
 - Character must have a strong connection to ${interest}
 - Character's journey must revolve around ${interest}
+- Avoid any specific age mentions in the story text
 
 🎨 WRITING QUALITY:
 - Include 3-5 pieces of natural dialogue per chapter (use quotation marks)
@@ -368,7 +399,8 @@ ${genreCombination ? `🎭 GENRE STYLE REQUIREMENTS:
 ⚠️ VALIDATION CHECKLIST (VERIFY BEFORE SUBMITTING):
 □ Each chapter is 300-500 words exactly
 □ Story is entirely about ${interest}
-□ Protagonist is age-appropriate
+□ Protagonist is age-appropriate (but age not explicitly stated)
+□ No explicit age mentions in the story text
 □ Includes dialogue and sensory details
 □ Has a clear beginning, middle, and end
 □ Proper paragraph structure and formatting
@@ -922,10 +954,12 @@ Return the entire response as a single, valid JSON object with the following str
       "type": "comprehension",
       "text": "The full question text",
       "options": ["Option A", "Option B", "Option C", "Option D"],
-      "correctAnswer": "A"
+      "correctAnswer": "A" or "B" or "C" or "D"
     }
   ]
 }
+
+IMPORTANT: Randomize the correct answer positions across all questions. Do not put all correct answers in the same position (A, B, C, or D). Mix them up so that correct answers appear in different positions throughout the assessment.
 `;
 
     const modelConfig = modelOverride || getModelConfig(CONTENT_TYPES.DAILY_TASK_GENERATION);
@@ -1047,7 +1081,7 @@ Return the entire response as a single, valid JSON object with the following str
       "word": "target_word",
       "text": "What is a synonym for [word]?",
       "options": ["Option A", "Option B", "Option C", "Option D"],
-      "correctAnswer": "A"
+      "correctAnswer": "A" or "B" or "C" or "D"
     },
     {
       "type": "vocabulary",
@@ -1055,7 +1089,7 @@ Return the entire response as a single, valid JSON object with the following str
       "word": "target_word",
       "text": "Based on the context, what does [word] mean?",
       "options": ["Option A", "Option B", "Option C", "Option D"],
-      "correctAnswer": "B"
+      "correctAnswer": "A" or "B" or "C" or "D"
     },
     {
       "type": "vocabulary",
@@ -1063,7 +1097,7 @@ Return the entire response as a single, valid JSON object with the following str
       "word": "target_word",
       "text": "Complete the sentence: The character felt [blank] when...",
       "options": ["Option A", "Option B", "Option C", "Option D"],
-      "correctAnswer": "C"
+      "correctAnswer": "A" or "B" or "C" or "D"
     },
     {
       "type": "vocabulary",
@@ -1074,6 +1108,8 @@ Return the entire response as a single, valid JSON object with the following str
     }
   ]
 }
+
+IMPORTANT: Randomize the correct answer positions across all multiple-choice questions. Do not put all correct answers in the same position (A, B, C, or D). Mix them up so that correct answers appear in different positions throughout the activities.
 `;
 
     const modelConfig = modelOverride || getModelConfig(CONTENT_TYPES.DAILY_TASK_GENERATION);
@@ -1136,6 +1172,226 @@ Return the entire response as a single, valid JSON object with the following str
   } catch (error) {
     console.error('Error generating vocabulary activities from OpenAI:', error);
     throw new Error(`Failed to generate vocabulary activities: ${error.message}`);
+  }
+}
+
+/**
+ * Validates vocabulary definition quality to ensure educational value.
+ * @param {string} word - The vocabulary word being defined.
+ * @param {string} definition - The definition to validate.
+ * @returns {object} - Validation result with isValid boolean and reason string.
+ */
+function validateVocabularyDefinition(word, definition) {
+  const wordLower = word.toLowerCase();
+  const definitionLower = definition.toLowerCase();
+  
+  // Check for circular definitions
+  if (definitionLower.includes(wordLower)) {
+    return {
+      isValid: false,
+      reason: `Circular definition: "${word}" appears in its own definition`
+    };
+  }
+  
+  // Check for overly simple definitions
+  if (definitionLower.length < 20) {
+    return {
+      isValid: false,
+      reason: `Definition too short: "${definition}" (minimum 20 characters)`
+    };
+  }
+  
+  // Check for proper sentence structure (ends with period)
+  if (!definition.trim().endsWith('.')) {
+    return {
+      isValid: false,
+      reason: `Definition must end with a period: "${definition}"`
+    };
+  }
+  
+  // Check for generic definitions
+  const genericPhrases = ['a type of', 'something that', 'a thing that', 'a kind of'];
+  if (genericPhrases.some(phrase => definitionLower.startsWith(phrase))) {
+    return {
+      isValid: false,
+      reason: `Definition too generic: "${definition}"`
+    };
+  }
+  
+  return { isValid: true, reason: 'Definition passes quality checks' };
+}
+
+/**
+ * Generates high-quality vocabulary questions for assessments with improved definitions.
+ * @param {string} passageText - The text content of the passage.
+ * @param {object} student - The student object from the database.
+ * @param {object} modelOverride - Optional model override configuration
+ * @returns {Promise<object>} - A promise that resolves to an object containing vocabulary questions.
+ */
+export async function generateAssessmentVocabularyQuestions(passageText, student, modelOverride = null) {
+  try {
+    // Get the most recent assessment to determine reading level
+    const mostRecentAssessment = await getMostRecentAssessment(student.id);
+    
+    // Adjust the grade level based on previous reading performance
+    const adjustedGradeLevel = adjustGradeLevel(
+      student.gradeLevel, 
+      mostRecentAssessment?.readingLevelLabel
+    );
+    
+    // Calculate student age
+    const studentAge = new Date().getFullYear() - student.birthday.getFullYear();
+    
+    const vocabularyPrompt = `
+You are an expert children's reading specialist creating vocabulary questions for a reading assessment.
+Based on the following passage, generate 4 high-quality vocabulary questions for a ${studentAge}-year-old student in grade ${student.gradeLevel}.
+
+PASSAGE TEXT:
+${passageText}
+
+VOCABULARY QUESTION REQUIREMENTS:
+- Choose 4 different vocabulary words that appear in the passage
+- Each word should be challenging but appropriate for grade ${adjustedGradeLevel}
+- Generate 4 multiple-choice options (A, B, C, D) for each vocabulary question
+- The correct answer should be a clear, educational definition
+- All options must be complete sentences ending with periods
+- NEVER use the target word in its own definition
+- Avoid circular or overly simple definitions
+- Ensure definitions are age-appropriate and educational
+- Each vocabulary word should appear only once across all questions
+- Include the sentence from the passage that contains each vocabulary word
+
+VOCABULARY DEFINITION EXAMPLES:
+GOOD: "Having a lot of light or being very colorful and cheerful."
+BAD: "Something that is bright." (circular definition)
+
+GOOD: "Food that tastes very good and is enjoyable to eat."
+BAD: "A type of food that people eat." (too generic)
+
+GOOD: "Showing courage and not being afraid to face difficult situations."
+BAD: "Being brave." (circular definition)
+
+OUTPUT FORMAT (valid JSON only):
+{
+  "vocabularyQuestions": [
+    {
+      "type": "vocabulary",
+      "word": "target_word",
+      "text": "What does the word '[word]' most likely mean in the sentence below?",
+      "context": "The sentence from the passage containing the vocabulary word.",
+      "options": [
+        "Correct definition - clear and educational.",
+        "Incorrect option 1 - plausible but wrong.",
+        "Incorrect option 2 - plausible but wrong.",
+        "Incorrect option 3 - plausible but wrong."
+      ],
+      "correctAnswer": "A" or "B" or "C" or "D"
+    }
+  ]
+}
+
+IMPORTANT: 
+- Return only valid JSON. Do not include any text outside the JSON structure.
+- All definitions must be complete sentences ending with periods.
+- Ensure no duplicate vocabulary words across questions.
+- Validate that definitions are actually helpful for learning.
+- Randomize the correct answer positions across all questions. Do not put all correct answers in the same position (A, B, C, or D). Mix them up so that correct answers appear in different positions throughout the assessment.
+`;
+
+    const modelConfig = modelOverride || getModelConfig(CONTENT_TYPES.DAILY_TASK_GENERATION);
+    
+    const aiFunction = async () => {
+      // Use Responses API for GPT-5, Chat Completions for other models
+      if (modelConfig.model === 'gpt-5') {
+        return await openai.responses.create({
+          model: modelConfig.model,
+          input: [{ role: 'user', content: vocabularyPrompt }],
+          text: { verbosity: 'medium' },
+          reasoning: { effort: 'minimal' },
+          tool_choice: 'none',
+          max_output_tokens: modelConfig.maxTokens,
+        });
+      } else {
+        return await openai.chat.completions.create({
+          model: modelConfig.model,
+          messages: [{ role: 'user', content: vocabularyPrompt }],
+          temperature: getTemperatureForModel(modelConfig.model, modelConfig.temperature),
+          max_completion_tokens: modelConfig.maxTokens,
+        });
+      }
+    };
+
+    const result = await logAIRequestWithCapture(
+      'vocabulary_question_generation',
+      modelConfig,
+      vocabularyPrompt,
+      aiFunction
+    );
+
+    let vocabularyData;
+    try {
+      vocabularyData = JSON.parse(result.choices[0].message.content);
+    } catch (parseError) {
+      console.error('Failed to parse vocabulary questions JSON:', parseError);
+      // Try to clean the response and parse again
+      try {
+        let cleanedContent = result.choices[0].message.content;
+        // Remove any leading/trailing code block markers (``` or ```json)
+        cleanedContent = cleanedContent.replace(/```[a-z]*\n?/gi, '').replace(/```/g, '').trim();
+        // Now extract the JSON object
+        const startIndex = cleanedContent.indexOf('{');
+        const endIndex = cleanedContent.lastIndexOf('}') + 1;
+        cleanedContent = cleanedContent.substring(startIndex, endIndex);
+        vocabularyData = JSON.parse(cleanedContent);
+        console.log('Successfully parsed vocabulary questions after cleaning JSON');
+      } catch (cleanError) {
+        throw new Error(`Failed to parse JSON response: ${parseError.message}`);
+      }
+    }
+    
+    // Validate vocabulary questions quality
+    if (!vocabularyData.vocabularyQuestions || !Array.isArray(vocabularyData.vocabularyQuestions)) {
+      throw new Error('Vocabulary questions response missing required fields');
+    }
+    
+    // Validate that each vocabulary question has required fields
+    for (let i = 0; i < vocabularyData.vocabularyQuestions.length; i++) {
+      const question = vocabularyData.vocabularyQuestions[i];
+      if (!question.word || !question.text || !question.options || !question.correctAnswer || !question.context) {
+        throw new Error(`Vocabulary question at index ${i} missing required fields`);
+      }
+      
+      // Validate the correct answer definition quality
+      const correctOption = question.options[question.correctAnswer.charCodeAt(0) - 65]; // Convert A->0, B->1, etc.
+      if (correctOption) {
+        const validation = validateVocabularyDefinition(question.word, correctOption);
+        if (!validation.isValid) {
+          throw new Error(`Definition quality issue for "${question.word}": ${validation.reason}`);
+        }
+      }
+      
+      // Check that all options end with a period
+      for (let j = 0; j < question.options.length; j++) {
+        if (!question.options[j].trim().endsWith('.')) {
+          throw new Error(`Option ${j + 1} for "${question.word}" must end with a period: "${question.options[j]}"`);
+        }
+      }
+    }
+    
+    // Check for duplicate vocabulary words
+    const words = vocabularyData.vocabularyQuestions.map(q => q.word.toLowerCase());
+    const uniqueWords = new Set(words);
+    if (uniqueWords.size !== words.length) {
+      throw new Error('Duplicate vocabulary words found. Each word should appear only once.');
+    }
+    
+    console.log(`Successfully generated ${vocabularyData.vocabularyQuestions.length} vocabulary questions for student: ${student.name}`);
+    
+    return vocabularyData;
+
+  } catch (error) {
+    console.error('Error generating vocabulary questions from OpenAI:', error);
+    throw new Error(`Failed to generate vocabulary questions: ${error.message}`);
   }
 }
 
@@ -1235,7 +1491,7 @@ Return the entire response as a single, valid JSON object with the following str
         {
           "question": "Question 1?",
           "options": ["A", "B", "C", "D"],
-          "correctAnswer": "A"
+          "correctAnswer": "A" or "B" or "C" or "D"
         }
       ]
     },
@@ -2959,39 +3215,45 @@ export async function generateStoryActivityContent(chapterContent, student, acti
     switch (activityType) {
       case 'who':
         prompt = `
-You are an expert children's reading specialist. 
-Based on the following story chapter, extract the main characters and create a character matching activity.
+      You are an expert children's reading specialist. 
+      Based on the following story chapter, extract the main characters and create a character matching activity.
 
-Story Chapter:
-${chapterContent}
+      Story Chapter:
+      ${chapterContent}
 
-Requirements:
-- Identify 3-4 main characters from the story
-- For each character, provide:
-  - A clear, memorable name
-  - A descriptive summary (2-3 sentences) that captures their role and personality
-- Make descriptions engaging and appropriate for a ${student.gradeLevel} grade student
-- Ensure descriptions are specific enough to match correctly but not too obvious
+      Requirements:
+      - Identify 2-4 main characters from the story (no more, no less)
+      - For each character, provide:
+        - A clear, memorable name
+        - A brief, generic description (1 sentence only) that captures their basic role
+      - Make descriptions simple and general, similar to typical character descriptions
+      - Avoid specific plot details or unique characteristics
+      - Keep descriptions appropriate for a ${student.gradeLevel} grade student
+      - Descriptions should be similar in length and style to typical character cards
 
-Return the response as a valid JSON object with this structure:
-{
-  "characters": [
-    {
-      "id": "char1",
-      "name": "Character Name",
-      "description": "A detailed description of this character's role and personality in the story."
-    }
-  ]
-}`;
-        expectedStructure = {
-          characters: [
-            {
-              id: "char1",
-              name: "Example Character",
-              description: "Example description"
-            }
-          ]
-        };
+      Return the response as a valid JSON object with this structure:
+      {
+        "realCharacters": [
+          {
+            "id": "char1",
+            "name": "Character Name",
+            "description": "A brief, generic description of this character's basic role in the story."
+          }
+        ],
+        "decoyCharacters": [
+          {
+            "id": "decoy1",
+            "name": "Decoy Character Name",
+            "description": "A brief, generic description that could fit any story."
+          }
+        ]
+      }
+
+      IMPORTANT: 
+      - Include exactly 2-4 real characters from the story
+      - Include exactly 4-6 decoy characters to make a total of 8 choices
+      - Decoy characters should have generic names and descriptions that don't reveal they're fake
+      - All descriptions should be similar in length and style`;
         break;
         
       case 'sequence':
@@ -3033,6 +3295,49 @@ Return the response as a valid JSON object with this structure:
         };
         break;
         
+      case 'where':
+        prompt = `
+You are an expert children's reading specialist. 
+Based on the following story chapter, extract the main settings/locations and create a setting identification activity.
+
+Story Chapter:
+${chapterContent}
+
+Requirements:
+- Identify 2-4 main settings/locations from the story (no more, no less)
+- For each setting, provide:
+  - A clear, memorable name
+  - A brief, generic description (1 sentence only) that captures the location
+- Make descriptions simple and general, similar to typical setting descriptions
+- Avoid specific plot details or unique characteristics
+- Keep descriptions appropriate for a ${student.gradeLevel} grade student
+- Descriptions should be similar in length and style to typical setting cards
+
+Return the response as a valid JSON object with this structure:
+{
+  "realSettings": [
+    {
+      "id": "setting1",
+      "name": "Setting Name",
+      "description": "A brief, generic description of this location in the story."
+    }
+  ],
+  "decoySettings": [
+    {
+      "id": "decoy1",
+      "name": "Decoy Setting Name",
+      "description": "A brief, generic description that could fit any story."
+    }
+  ]
+}
+
+IMPORTANT: 
+- Include exactly 2-4 real settings from the story
+- Include exactly 4-6 decoy settings to make a total of 8 choices
+- Decoy settings should have generic names and descriptions that don't reveal they're fake
+- All descriptions should be similar in length and style`;
+        break;
+        
       default:
         return null;
     }
@@ -3045,7 +3350,7 @@ Return the response as a valid JSON object with this structure:
       });
     };
 
-    const result = await logAIRequestWithCapture({
+    const resultWithLogs = await logAIRequestWithCapture({
       contentType: CONTENT_TYPES.DAILY_TASK_GENERATION,
       aiFunction,
       modelConfig,
@@ -3057,12 +3362,94 @@ Return the response as a valid JSON object with this structure:
       }
     });
 
-    const response = result.choices[0].message.content;
-    const parsedResponse = JSON.parse(response);
+    // OpenAI raw response is under .result from the logging wrapper
+    const completion = resultWithLogs?.result;
+    const responseText = completion?.choices?.[0]?.message?.content ?? '{}';
+    
+    console.log(`🔍 Raw AI response for ${activityType}:`, responseText.substring(0, 200) + '...');
+    
+    let parsedResponse;
+    try {
+      parsedResponse = JSON.parse(responseText);
+      console.log(`✅ Successfully parsed ${activityType} response:`, Object.keys(parsedResponse));
+    } catch (parseErr) {
+      console.warn(`❌ Failed to parse AI JSON for ${activityType}; using fallback. Parse error:`, parseErr.message);
+      console.warn(`Raw response:`, responseText);
+      throw new Error('Invalid JSON from AI');
+    }
     
     // Validate the response structure
     if (!parsedResponse || typeof parsedResponse !== 'object') {
+      console.warn(`❌ Invalid response structure for ${activityType}:`, parsedResponse);
       throw new Error('Invalid response structure from AI');
+    }
+    
+    // Validate specific activity types
+    switch (activityType) {
+      case 'who':
+        if (!parsedResponse.realCharacters || !Array.isArray(parsedResponse.realCharacters) || 
+            !parsedResponse.decoyCharacters || !Array.isArray(parsedResponse.decoyCharacters)) {
+          throw new Error('Invalid who activity structure: missing or invalid realCharacters or decoyCharacters arrays');
+        }
+        
+        // Validate character structure
+        parsedResponse.realCharacters.forEach((char, index) => {
+          if (!char.name || !char.description) {
+            throw new Error(`Invalid real character at index ${index}: missing name or description`);
+          }
+        });
+        
+        parsedResponse.decoyCharacters.forEach((char, index) => {
+          if (!char.name || !char.description) {
+            throw new Error(`Invalid decoy character at index ${index}: missing name or description`);
+          }
+        });
+        
+        // Ensure we have 2-4 real characters and 4-6 decoy characters for a total of 8
+        const totalCharacters = parsedResponse.realCharacters.length + parsedResponse.decoyCharacters.length;
+        if (totalCharacters !== 8) {
+          console.warn(`⚠️ WHO activity has ${totalCharacters} total characters (expected 8). Real: ${parsedResponse.realCharacters.length}, Decoys: ${parsedResponse.decoyCharacters.length}`);
+        }
+        
+        console.log(`✅ WHO activity generated with ${parsedResponse.realCharacters.length} real characters and ${parsedResponse.decoyCharacters.length} decoy characters`);
+        break;
+        
+      case 'sequence':
+        if (!parsedResponse.events || !Array.isArray(parsedResponse.events) || 
+            !parsedResponse.correctOrder || !Array.isArray(parsedResponse.correctOrder)) {
+          throw new Error('Invalid sequence activity structure: missing or invalid events or correctOrder arrays');
+        }
+        
+        console.log(`✅ SEQUENCE activity generated with ${parsedResponse.events.length} events`);
+        break;
+        
+      case 'where':
+        if (!parsedResponse.realSettings || !Array.isArray(parsedResponse.realSettings) || 
+            !parsedResponse.decoySettings || !Array.isArray(parsedResponse.decoySettings)) {
+          throw new Error('Invalid where activity structure: missing or invalid realSettings or decoySettings arrays');
+        }
+        
+        // Validate setting structure
+        parsedResponse.realSettings.forEach((setting, index) => {
+          if (!setting.name || !setting.description) {
+            throw new Error(`Invalid real setting at index ${index}: missing name or description`);
+          }
+        });
+        
+        parsedResponse.decoySettings.forEach((setting, index) => {
+          if (!setting.name || !setting.description) {
+            throw new Error(`Invalid decoy setting at index ${index}: missing name or description`);
+          }
+        });
+        
+        // Ensure we have 2-4 real settings and 4-6 decoy settings for a total of 8
+        const totalSettings = parsedResponse.realSettings.length + parsedResponse.decoySettings.length;
+        if (totalSettings !== 8) {
+          console.warn(`⚠️ WHERE activity has ${totalSettings} total settings (expected 8). Real: ${parsedResponse.realSettings.length}, Decoys: ${parsedResponse.decoySettings.length}`);
+        }
+        
+        console.log(`✅ WHERE activity generated with ${parsedResponse.realSettings.length} real settings and ${parsedResponse.decoySettings.length} decoy settings`);
+        break;
     }
     
     return parsedResponse;
@@ -3074,10 +3461,15 @@ Return the response as a valid JSON object with this structure:
     switch (activityType) {
       case 'who':
         return {
-          characters: [
+          realCharacters: [
             { id: 'char1', name: 'Main Character', description: 'The main character of the story who goes on an adventure.' },
             { id: 'char2', name: 'Helper', description: 'A friendly character who helps the main character along the way.' },
             { id: 'char3', name: 'Challenge', description: 'A character who creates an obstacle or challenge in the story.' }
+          ],
+          decoyCharacters: [
+            { id: 'decoy1', name: 'Decoy Character 1', description: 'A character who appears in the story but is not a main character.' },
+            { id: 'decoy2', name: 'Decoy Character 2', description: 'A character who appears in the story but is not a main character.' },
+            { id: 'decoy3', name: 'Decoy Character 3', description: 'A character who appears in the story but is not a main character.' }
           ]
         };
       case 'sequence':
@@ -3089,6 +3481,19 @@ Return the response as a valid JSON object with this structure:
             { id: 'event4', text: 'The story reaches its conclusion.' }
           ],
           correctOrder: ['event1', 'event2', 'event3', 'event4']
+        };
+      case 'where':
+        return {
+          realSettings: [
+            { id: 'setting1', name: 'Main Setting', description: 'The main setting of the story.' },
+            { id: 'setting2', name: 'Secondary Setting', description: 'A secondary setting in the story.' },
+            { id: 'setting3', name: 'Tertiary Setting', description: 'A tertiary setting in the story.' }
+          ],
+          decoySettings: [
+            { id: 'decoy1', name: 'Decoy Setting 1', description: 'A setting that could be in the story.' },
+            { id: 'decoy2', name: 'Decoy Setting 2', description: 'A setting that could be in the story.' },
+            { id: 'decoy3', name: 'Decoy Setting 3', description: 'A setting that could be in the story.' }
+          ]
         };
       default:
         return null;

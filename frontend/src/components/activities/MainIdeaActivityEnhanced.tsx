@@ -12,7 +12,7 @@ interface MainIdeaActivityEnhancedProps extends EnhancedActivityProps {
   content: { type: 'main-idea'; content: EnhancedMainIdeaContent };
 }
 
-const MainIdeaActivityEnhanced: React.FC<MainIdeaActivityEnhancedProps> = ({
+export default function MainIdeaActivityEnhanced({
   content,
   progress,
   onComplete,
@@ -20,13 +20,23 @@ const MainIdeaActivityEnhanced: React.FC<MainIdeaActivityEnhancedProps> = ({
   onJumpToContext,
   className = '',
   disabled = false
-}) => {
+}: MainIdeaActivityEnhancedProps) {
+  // Debug: Log what we're receiving
+  console.log('🧠 Main Idea activity received:', {
+    content,
+    hasOptions: !!content?.content?.options,
+    optionsCount: content?.content?.options?.length || 0,
+    options: content?.content?.options,
+    question: content?.content?.question
+  });
+
   const deviceInfo = useDeviceDetector();
   const interactionPattern = getOptimalInteractionPattern(deviceInfo);
   
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<ActivityFeedback | null>(null);
   const [showFeedback, setShowFeedback] = useState(false);
+  const [checks, setChecks] = useState(0);
   const [startTime] = useState(Date.now());
 
   // Initialize from progress if available
@@ -77,86 +87,46 @@ const MainIdeaActivityEnhanced: React.FC<MainIdeaActivityEnhancedProps> = ({
 
   const handleOptionSelect = useCallback((optionText: string) => {
     if (disabled) return;
-
     setSelectedOption(optionText);
-    
-    // Find the selected option to get feedback
-    const option = content.content.options.find(opt => opt.text === optionText);
-    if (option) {
-      const feedback: ActivityFeedback = {
-        isCorrect: option.isCorrect,
-        score: option.isCorrect ? 100 : 0,
-        feedback: option.feedback,
-        suggestions: option.isCorrect ? undefined : [
-          'Read the story carefully to understand the main message.',
-          'Look for repeated ideas or themes throughout the story.',
-          'Consider what the author wants readers to learn or understand.'
-        ],
-        nextSteps: option.isCorrect ? [
-          'Great job! You can now move on to the next activity.',
-          'Try to remember this main idea for the other activities.'
-        ] : [
-          'Review the story to understand the main message.',
-          'Look for clues about what the author is trying to teach.'
-        ]
-      };
-      setFeedback(feedback);
-      setShowFeedback(true);
-      
-      // Hide feedback after 5 seconds for incorrect answers
-      if (!option.isCorrect) {
-        setTimeout(() => setShowFeedback(false), 5000);
-      }
-    }
-  }, [disabled, content.content.options]);
+    setShowFeedback(false);
+  }, [disabled]);
 
-  const handleComplete = useCallback(() => {
+  const handleCheck = useCallback(() => {
     if (disabled || !selectedOption) return;
 
     const timeSpent = Math.floor((Date.now() - startTime) / 1000);
-    const selectedOptionData = content.content.options.find(opt => opt.text === selectedOption);
-    
-    const isCorrect = selectedOptionData?.isCorrect || false;
+    const selectedOptionData = content.content.options?.find(opt => opt.text === selectedOption);
+    const isCorrect = !!selectedOptionData?.isCorrect;
     const score = isCorrect ? 100 : 0;
-    
+
     const finalFeedback: ActivityFeedback = {
       isCorrect,
       score,
-      feedback: selectedOptionData?.feedback || 'Thank you for your response.',
-      suggestions: isCorrect ? undefined : [
-        'Read the story carefully to understand the main message.',
-        'Look for repeated ideas or themes throughout the story.',
-        'Consider what the author wants readers to learn or understand.',
-        'Think about the deeper meaning, not just what happened.'
-      ],
-      nextSteps: isCorrect ? [
-        'Great job! You can now move on to the next activity.',
-        'Try to remember this main idea for the other activities.'
-      ] : [
-        'Review the story to understand the main message.',
-        'Look for clues about what the author is trying to teach.'
-      ]
+      feedback: isCorrect ? 'Correct' : 'Incorrect'
     };
-
     setFeedback(finalFeedback);
     setShowFeedback(true);
+    setChecks((c) => c + (isCorrect ? 0 : 1));
 
-    // Create responses for detailed tracking
-    const responses: ActivityResponse[] = [
-      {
-        id: `main-idea-response-${Date.now()}`,
-        question: content.content.question,
-        answer: selectedOption,
-        isCorrect,
-        feedback: finalFeedback.feedback,
-        score,
-        timeSpent,
-        createdAt: new Date()
-      }
-    ];
+    // Save in_progress for attempts
+    onProgressUpdate?.('main-idea', 'in_progress', timeSpent);
 
-    onComplete('main-idea', selectedOption, responses);
-    onProgressUpdate?.('main-idea', 'completed', timeSpent);
+    if (isCorrect) {
+      const responses: ActivityResponse[] = [
+        {
+          id: `main-idea-response-${Date.now()}`,
+          question: content.content.question,
+          answer: [selectedOption],
+          isCorrect,
+          feedback: finalFeedback.feedback,
+          score,
+          timeSpent,
+          createdAt: new Date()
+        }
+      ];
+      onComplete('main-idea', [selectedOption], responses);
+      onProgressUpdate?.('main-idea', 'completed', timeSpent);
+    }
   }, [disabled, selectedOption, content, startTime, onComplete, onProgressUpdate]);
 
   const getOptionStatus = (option: EnhancedMainIdeaOption) => {
@@ -183,219 +153,110 @@ const MainIdeaActivityEnhanced: React.FC<MainIdeaActivityEnhancedProps> = ({
     }
   };
 
-  const isCompleted = progress?.status === 'completed';
-  const canComplete = selectedOption !== null && !isCompleted;
+  const isCompleted = progress?.status === 'completed' || (feedback?.isCorrect ?? false);
+  const canCheck = !!selectedOption && !isCompleted;
 
   return (
-    <div className={`space-y-6 ${className}`}>
-      {/* Activity Header */}
+    <div className="space-y-4">
+      {/* Simple header like Who activity */}
+      <div>
+        <h2 className="text-lg font-semibold">{content.content.question}</h2>
+      </div>
+
+      {/* Simple blue instruction box like Who activity */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <div className="flex items-start">
-          <svg className="w-5 h-5 text-blue-600 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-          </svg>
-          <div>
-            <h4 className="text-sm font-medium text-blue-900 mb-1">How to complete this activity:</h4>
-            <ul className="text-sm text-blue-800 space-y-1">
-              <li>• {interactionPattern.primaryInteraction === 'tap' ? 'Tap' : 'Click'} on the option that best describes the main idea</li>
-              <li>• Read all options carefully before making your choice</li>
-              <li>• You'll get immediate feedback on your selection</li>
-              <li>• Think about what the author wants readers to understand</li>
-            </ul>
-          </div>
-        </div>
+        <p className="text-sm text-blue-900">Select the option that best describes the main idea of this story.</p>
       </div>
 
-      {/* Question */}
-      <div className="text-center">
-        <h3 className="text-xl font-semibold text-gray-900 mb-2">
-          {content.content.question}
-        </h3>
-        <p className="text-gray-600">
-          {content.content.instructions}
-        </p>
-      </div>
-
-      {/* Immediate Feedback */}
-      {showFeedback && feedback && (
-        <div className={`border rounded-lg p-4 transition-all duration-300 ${
-          feedback.isCorrect 
-            ? 'border-green-200 bg-green-50 text-green-800' 
-            : 'border-yellow-200 bg-yellow-50 text-yellow-800'
-        }`} role="status" aria-live="polite">
-          <div className="flex items-start">
-            <svg className={`w-5 h-5 mr-3 mt-0.5 flex-shrink-0 ${
-              feedback.isCorrect ? 'text-green-600' : 'text-yellow-600'
-            }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              {feedback.isCorrect ? (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-              ) : (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
-              )}
-            </svg>
-            <div>
-              <p className="font-medium">{feedback.feedback}</p>
-              {feedback.suggestions && feedback.suggestions.length > 0 && (
-                <ul className="mt-2 text-sm space-y-1">
-                  {feedback.suggestions.map((suggestion, index) => (
-                    <li key={index}>• {suggestion}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Multiple Choice Options */}
-      <div className="space-y-3">
-        <h4 className="text-lg font-semibold text-gray-900">
-          Select the option that best describes the main idea:
-        </h4>
-        
-        <div className="space-y-3">
-          {content.content.options.map((option, index) => {
-            const status = getOptionStatus(option);
+      {/* Grid layout for options like Who activity */}
+      <div>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          {(content.content.options || []).map((option, index) => {
             const isSelected = selectedOption === option.text;
+            const isCorrect = option.isCorrect;
             
             return (
-              <div
+              <button
                 key={option.text}
-                className={`
-                  relative p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 focus-ring
-                  ${getOptionStatusColor(status)}
-                  ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
-                `}
+                type="button"
                 onClick={() => handleOptionSelect(option.text)}
-                role="button"
-                tabIndex={disabled ? -1 : 0}
-                aria-pressed={isSelected}
-                aria-label={`Option ${index + 1}: ${option.text}${isSelected ? ' (selected)' : ''}`}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    handleOptionSelect(option.text);
+                disabled={disabled || isCompleted}
+                className={`
+                  w-full rounded-lg border p-4 text-left shadow-sm transition-colors
+                  focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400
+                  ${disabled || isCompleted ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}
+                  ${isSelected 
+                    ? 'border-blue-500 bg-blue-50' 
+                    : 'border-gray-200 bg-white hover:border-gray-300'
                   }
-                }}
+                  ${showFeedback && isSelected && isCorrect ? 'border-green-300 bg-green-50' : ''}
+                  ${showFeedback && isSelected && !isCorrect ? 'border-red-300 bg-red-50' : ''}
+                `}
               >
-                {/* Selection Indicator */}
-                <div className="absolute top-2 left-2">
-                  <div className={`w-5 h-5 rounded-full flex items-center justify-center ${
-                    status === 'correct' 
-                      ? 'bg-green-500' 
-                      : status === 'incorrect'
-                        ? 'bg-red-500'
-                        : 'bg-gray-300'
-                  }`}>
-                    <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      {status === 'correct' ? (
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-                      ) : status === 'incorrect' ? (
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
-                      ) : (
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-                      )}
-                    </svg>
-                  </div>
+                <div className="mb-1 text-base font-normal text-gray-900">
+                  {option.text}
+                  {showFeedback && isSelected && isCorrect && (
+                    <span className="ml-1">✅</span>
+                  )}
+                  {showFeedback && isSelected && !isCorrect && (
+                    <span className="ml-1">✗</span>
+                  )}
                 </div>
-
-                {/* Option Content */}
-                <div className="ml-8">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-gray-500">Option {index + 1}</span>
-                    {option.isCorrect && selectedOption && (
-                      <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">
-                        Correct Answer
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-gray-800 leading-relaxed">{option.text}</p>
-                </div>
-              </div>
+              </button>
             );
           })}
         </div>
       </div>
 
-      {/* Selection Summary */}
-      {selectedOption && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <svg className="w-5 h-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-              </svg>
-              <span className="text-sm font-medium text-green-800">
-                Option selected
-              </span>
-            </div>
-            {canComplete && (
-              <button
-                onClick={handleComplete}
-                disabled={disabled}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 focus-ring transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                aria-label="Complete activity"
-              >
-                Complete Activity
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Jump to Context */}
-      {onJumpToContext && (
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h4 className="text-sm font-medium text-gray-900 mb-1">Find theme clues in the story</h4>
-              <p className="text-sm text-gray-600">Click the button to jump to relevant parts of the story</p>
-            </div>
-            <button
-              onClick={() => onJumpToContext('main-idea-context')}
-              className="flex items-center px-3 py-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors focus-ring"
-              aria-label="Jump to story context for main idea analysis"
-            >
-              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
-              </svg>
-              Find in Story
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Final Feedback */}
-      {isCompleted && feedback && (
-        <div className="text-center py-4">
-          <div className={`inline-flex items-center px-4 py-2 rounded-full ${
-            feedback.isCorrect 
-              ? 'bg-green-100 text-green-800' 
-              : 'bg-yellow-100 text-yellow-800'
-          }`}>
-            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              {feedback.isCorrect ? (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-              ) : (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
-              )}
-            </svg>
-            {feedback.isCorrect ? 'Activity completed!' : 'Activity completed with feedback'}
-          </div>
-          {feedback.nextSteps && feedback.nextSteps.length > 0 && (
-            <div className="mt-3 text-sm text-gray-600">
-              <p className="font-medium">Next steps:</p>
-              <ul className="mt-1 space-y-1">
-                {feedback.nextSteps.map((step, index) => (
-                  <li key={index}>• {step}</li>
-                ))}
-              </ul>
-            </div>
+      {/* Simple feedback and button like Who activity */}
+      <div className="flex items-center justify-between pt-1">
+        <div className="text-sm text-gray-700">
+          {showFeedback && feedback && (
+            feedback.isCorrect ? (
+              <span className="font-semibold text-green-700">Correct</span>
+            ) : (
+              <span className="font-semibold text-red-700">Incorrect</span>
+            )
           )}
         </div>
-      )}
+        {(() => {
+          const showNext = !!(feedback && feedback.isCorrect);
+          const isDisabled = !selectedOption && !showFeedback;
+          return (
+            <button
+              onClick={showNext ? () => {
+                // Save the answer when moving to next
+                if (selectedOption) {
+                  const responses: ActivityResponse[] = [
+                    {
+                      id: `main-idea-response-${Date.now()}`,
+                      question: content.content.question,
+                      answer: [selectedOption],
+                      isCorrect: true,
+                      feedback: feedback?.feedback || 'Correct answer!',
+                      score: 100,
+                      timeSpent: Math.floor((Date.now() - startTime) / 1000),
+                      createdAt: new Date()
+                    }
+                  ];
+                  onComplete('main-idea', [selectedOption], responses);
+                }
+                onProgressUpdate?.('main-idea', 'completed');
+              } : handleCheck}
+              className={`rounded-lg px-4 py-2 text-sm font-semibold shadow-sm ${
+                showNext
+                  ? 'text-white bg-green-600 hover:bg-green-700'
+                  : isDisabled
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
+                  : 'text-white bg-blue-600 hover:bg-blue-700'
+              }`}
+              disabled={isDisabled}
+            >
+              {showNext ? 'Next' : 'Check'}
+            </button>
+          );
+        })()}
+      </div>
     </div>
   );
 };
-
-export default MainIdeaActivityEnhanced;

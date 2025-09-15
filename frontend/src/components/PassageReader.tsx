@@ -7,9 +7,10 @@ interface PassageReaderProps {
   passage: string;
   studentName?: string;
   onComplete: (readingTime: number, errorCount: number) => void;
+  showCompleteButton?: boolean;
 }
 
-export default function PassageReader({ passage, studentName, onComplete }: PassageReaderProps) {
+export default function PassageReader({ passage, studentName, onComplete, showCompleteButton = true }: PassageReaderProps) {
   const [startTime, setStartTime] = useState<number | null>(null);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -250,19 +251,21 @@ export default function PassageReader({ passage, studentName, onComplete }: Pass
       </div>
 
       {/* Done Button */}
-      <div className="text-center no-print">
-        <button
-          onClick={handleComplete}
-          disabled={!hasStarted}
-          className={`px-6 py-3 rounded-lg font-medium transition-colors ${
-            !hasStarted
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              : 'bg-blue-600 text-white hover:bg-blue-700'
-          }`}
-        >
-          I&apos;m Done Reading
-        </button>
-      </div>
+      {showCompleteButton && (
+        <div className="text-center no-print">
+          <button
+            onClick={handleComplete}
+            disabled={!hasStarted}
+            className={`px-6 py-3 rounded-lg font-medium transition-colors ${
+              !hasStarted
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
+          >
+            I&apos;m Done Reading
+          </button>
+        </div>
+      )}
     </div>
   );
 } 

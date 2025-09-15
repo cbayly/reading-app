@@ -66,6 +66,7 @@ html {
   * {
     color: black !important;
     background: white !important;
+    box-shadow: none !important;
   }
   
   /* Page breaks */
@@ -80,5 +81,88 @@ html {
   
   div {
     page-break-inside: avoid;
+  }
+}
+
+/* Utility: visible only when printing */
+.print-only { display: none; }
+@media print {
+  .print-only { display: block !important; }
+}
+
+/* Prevent word splitting */
+.no-split {
+  white-space: normal !important;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+  hyphens: none !important;
+  -webkit-hyphens: none !important;
+  -moz-hyphens: none !important;
+  -ms-hyphens: none !important;
+}
+
+/* Prevent hyphenation */
+.no-hyphens {
+  hyphens: none !important;
+  -webkit-hyphens: none !important;
+  -moz-hyphens: none !important;
+  -ms-hyphens: none !important;
+}
+
+/* Override prose hyphens */
+.prose {
+  hyphens: none !important;
+  -webkit-hyphens: none !important;
+  -moz-hyphens: none !important;
+  -ms-hyphens: none !important;
+}
+
+.prose * {
+  hyphens: none !important;
+  -webkit-hyphens: none !important;
+  -moz-hyphens: none !important;
+  -ms-hyphens: none !important;
+}
+
+/* Specifically target passage readers */
+.print-passage {
+  hyphens: none !important;
+  -webkit-hyphens: none !important;
+  -moz-hyphens: none !important;
+  -ms-hyphens: none !important;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+  white-space: normal !important;
+}
+
+.print-passage * {
+  hyphens: none !important;
+  -webkit-hyphens: none !important;
+  -moz-hyphens: none !important;
+  -ms-hyphens: none !important;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+}
+
+@layer utilities {
+  .no-clamp {
+    -webkit-line-clamp: initial !important;
+    line-clamp: initial !important;
+    -webkit-box-orient: initial !important;
+  }
+  .no-clamp p {
+    display: block !important;
+    overflow: visible !important;
+    -webkit-line-clamp: initial !important;
+    line-clamp: initial !important;
+    -webkit-box-orient: initial !important;
+    text-overflow: clip !important;
+    white-space: normal !important;
+  }
+  .no-hyphens { 
+    hyphens: none !important;
+    -webkit-hyphens: none !important;
+    -moz-hyphens: none !important;
+    -ms-hyphens: none !important;
   }
 }

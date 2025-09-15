@@ -110,7 +110,7 @@ const StoryDisplay: React.FC<StoryDisplayProps> = ({
             </div>
 
             {/* Chapter content */}
-            <div className={`prose prose-lg max-w-none ${
+            <div className={`prose prose-lg max-w-none no-hyphens ${
               isReadingMode 
                 ? 'text-lg leading-relaxed font-serif' 
                 : 'text-base leading-normal'

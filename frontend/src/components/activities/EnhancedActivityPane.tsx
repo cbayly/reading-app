@@ -1,7 +1,8 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { ActivityStepper } from './shared/ActivityStepper';
-import { EnhancedActivitiesResponse, ActivityResponse } from '../../types/enhancedActivities';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import api from '@/lib/api';
+import { EnhancedActivitiesResponse, ActivityResponse, ActivityProgress } from '../../types/enhancedActivities';
 import { useActivityProgress } from '../../hooks/useActivityProgress';
+import { ActivityStepper } from './shared/ActivityStepper';
 import WhoActivityEnhanced from './WhoActivityEnhanced';
 import WhereActivityEnhanced from './WhereActivityEnhanced';
 import SequenceActivityEnhanced from './SequenceActivityEnhanced';
@@ -42,22 +43,143 @@ const EnhancedActivityPane: React.FC<EnhancedActivityPaneProps> = ({
   const activities = data.activities;
   const progress = data.progress;
 
-  const steps: ActivityStep[] = useMemo(() => {
-    const list: ActivityStep[] = [];
-    if (activities.who) list.push({ id: 'who', type: 'who', title: 'Who', description: 'Identify the main subject of the story.', isCompleted: progress.who?.status === 'completed', isCurrent: false, isLocked: false });
-    if (activities.where) list.push({ id: 'where', type: 'where', title: 'Where', description: 'Determine the location of the story.', isCompleted: progress.where?.status === 'completed', isCurrent: false, isLocked: false });
-    if (activities.sequence) list.push({ id: 'sequence', type: 'sequence', title: 'Sequence', description: 'Understand the sequence of events.', isCompleted: progress.sequence?.status === 'completed', isCurrent: false, isLocked: false });
-    if (activities['main-idea']) list.push({ id: 'main-idea', type: 'main-idea', title: 'Main Idea', description: 'Identify the central message or theme.', isCompleted: progress['main-idea']?.status === 'completed', isCurrent: false, isLocked: false });
-    if (activities.vocabulary) list.push({ id: 'vocabulary', type: 'vocabulary', title: 'Vocabulary', description: 'Learn new words and their meanings.', isCompleted: progress.vocabulary?.status === 'completed', isCurrent: false, isLocked: false });
-    if (activities.predict) list.push({ id: 'predict', type: 'predict', title: 'Predict', description: 'Make predictions about the story.', isCompleted: progress.predict?.status === 'completed', isCurrent: false, isLocked: false });
-    return list;
-  }, [activities, progress]);
-
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isLoading] = useState(false);
   const [error] = useState<string | null>(null);
+  const [activityProgress, setActivityProgress] = useState<Record<string, ActivityProgress>>({});
+  const rehydratedOnceRef = useRef(false);
+
+  // Generate storage key for current activity index
+  const currentIndexStorageKey = `current-activity-index:${data.planId}:${data.dayIndex}`;
+
+  // Initialize progress from the data
+  useEffect(() => {
+    if (data.progress) {
+      setActivityProgress(data.progress);
+    }
+  }, [data.progress]);
+
+  // Restore current activity index from localStorage on mount
+  useEffect(() => {
+    try {
+      const savedIndex = localStorage.getItem(currentIndexStorageKey);
+      if (savedIndex !== null) {
+        const index = parseInt(savedIndex, 10);
+        if (!isNaN(index) && index >= 0) {
+          setCurrentIndex(index);
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to restore current activity index from localStorage:', error);
+    }
+  }, [currentIndexStorageKey]);
+
+  // Save current activity index to localStorage when it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(currentIndexStorageKey, currentIndex.toString());
+    } catch (error) {
+      console.warn('Failed to save current activity index to localStorage:', error);
+    }
+  }, [currentIndex, currentIndexStorageKey]);
+
+  // Merge server progress for stepper rehydration on mount
+  useEffect(() => {
+    let cancelled = false;
+    const rehydrate = async () => {
+      if (rehydratedOnceRef.current) return;
+      try {
+        // Use legacy route first to avoid by-plan 404 noise; by-plan as fallback
+        let json: any;
+        try {
+          const { data: full } = await api.get(`/enhanced-activities/${data.planId}/${data.dayIndex}`);
+          json = full;
+        } catch {
+          const { data: full } = await api.get(`/enhanced-activities/by-plan/${data.planId}/${data.dayIndex}`);
+          json = full;
+        }
+        if (cancelled) return;
+        const serverMap = json?.progress || {};
+        // Conservative merge: never downgrade local status; prefer higher status
+        const statusRank: Record<string, number> = { not_started: 0, in_progress: 1, completed: 2 };
+        setActivityProgress(prev => {
+          const merged: Record<string, ActivityProgress> = { ...prev };
+          for (const key of Object.keys(serverMap)) {
+            const server = serverMap[key] as ActivityProgress;
+            const local = prev[key];
+            if (!local) {
+              merged[key] = server;
+              continue;
+            }
+            const localRank = statusRank[local.status] ?? 0;
+            const serverRank = statusRank[(server as any).status] ?? 0;
+            merged[key] = serverRank > localRank ? { ...local, ...server } : local;
+          }
+          rehydratedOnceRef.current = true;
+          return merged;
+        });
+      } catch {
+        try {
+          // Final attempt with alternate order
+          let json: any;
+          try {
+            const { data: full } = await api.get(`/enhanced-activities/${data.planId}/${data.dayIndex}`);
+            json = full;
+          } catch {
+            const { data: full } = await api.get(`/enhanced-activities/by-plan/${data.planId}/${data.dayIndex}`);
+            json = full;
+          }
+          if (cancelled) return;
+          const serverMap = json?.progress || {};
+          const statusRank: Record<string, number> = { not_started: 0, in_progress: 1, completed: 2 };
+          setActivityProgress(prev => {
+            const merged: Record<string, ActivityProgress> = { ...prev };
+            for (const key of Object.keys(serverMap)) {
+              const server = serverMap[key] as ActivityProgress;
+              const local = prev[key];
+              if (!local) {
+                merged[key] = server;
+                continue;
+              }
+              const localRank = statusRank[local.status] ?? 0;
+              const serverRank = statusRank[(server as any).status] ?? 0;
+              merged[key] = serverRank > localRank ? { ...local, ...server } : local;
+            }
+            rehydratedOnceRef.current = true;
+            return merged;
+          });
+        } catch {}
+      }
+    };
+    if (studentId) rehydrate();
+    return () => { cancelled = true; };
+  }, [studentId, data.planId, data.dayIndex]);
+
+  const steps: ActivityStep[] = useMemo(() => {
+    const baseSteps = [
+      { id: 'who', type: 'who', title: 'Who', description: 'Identify the main subject of the story.' },
+      { id: 'where', type: 'where', title: 'Where', description: 'Determine the location of the story.' },
+      { id: 'sequence', type: 'sequence', title: 'Sequence', description: 'Understand the sequence of events.' },
+      { id: 'main-idea', type: 'main-idea', title: 'Main Idea', description: 'Identify the central message or theme.' },
+      { id: 'vocabulary', type: 'vocabulary', title: 'Vocabulary', description: 'Learn key vocabulary words from the story.' },
+      { id: 'predict', type: 'predict', title: 'Predict', description: 'Make predictions about the story.' }
+    ];
+
+    return baseSteps.map((baseStep, index) => ({
+      ...baseStep,
+      isCompleted: activityProgress[baseStep.id]?.status === 'completed',
+      isCurrent: index === currentIndex,
+      isLocked: index > currentIndex
+    }));
+  }, [activities, activityProgress, currentIndex]);
 
   const onStepClick = useCallback((index: number) => setCurrentIndex(index), []);
+
+  const handleNext = useCallback(() => {
+    if (currentIndex < steps.length - 1) {
+      setCurrentIndex(currentIndex + 1);
+    }
+  }, [currentIndex, steps.length]);
 
   const step = steps[currentIndex];
 
@@ -74,10 +196,40 @@ const EnhancedActivityPane: React.FC<EnhancedActivityPaneProps> = ({
   const handleComplete = useCallback((activityType: string, answers: any[], responses?: ActivityResponse[]) => {
     if (studentId && responses && Array.isArray(responses)) {
       const timeSpent = responses.reduce((acc, r) => acc + (r.timeSpent || 0), 0);
-      completeActivity(responses, timeSpent).catch(() => {});
+      completeActivity(responses, timeSpent)
+        .then(async () => {
+          // Read-after-write confirmation: verify server reflects completion
+          try {
+            for (let i = 0; i < 3; i++) {
+              let confirmJson: any;
+              try {
+                const { data: resp } = await api.get(`/enhanced-activities/${data.planId}/${data.dayIndex}`);
+                confirmJson = resp;
+              } catch {
+                const { data: resp } = await api.get(`/enhanced-activities/by-plan/${data.planId}/${data.dayIndex}`);
+                confirmJson = resp;
+              }
+              const serverMap = confirmJson?.progress || {};
+              if (serverMap?.[activityType]?.status === 'completed') break;
+              await new Promise(r => setTimeout(r, 250 * (i + 1)));
+            }
+          } catch {}
+        })
+        .catch(() => {});
     }
+    
+    // Update local progress state to show completion in stepper
+    setActivityProgress(prev => ({
+      ...prev,
+      [activityType]: {
+        ...prev[activityType],
+        status: 'completed',
+        completedAt: new Date()
+      }
+    }));
+    
     onCompleteActivity?.(activityType, answers, responses);
-  }, [onCompleteActivity, completeActivity, studentId]);
+  }, [onCompleteActivity, completeActivity, studentId, data.planId, data.dayIndex]);
 
   // Enhanced progress update handler that automatically saves progress
   const handleProgressUpdate = useCallback((activityType: string, status: 'in_progress' | 'completed' | 'not_started', timeSpent?: number) => {
@@ -137,27 +289,31 @@ const EnhancedActivityPane: React.FC<EnhancedActivityPaneProps> = ({
   // Get session information
   const sessionInfo = getSessionInfo();
 
-  const renderActivity = () => {
+  const renderCurrentActivity = () => {
     if (!step) return null;
     switch (step.type) {
       case 'who':
         return (
           <WhoActivityEnhanced
             content={{ type: 'who', content: activities.who! }}
-            progress={progress.who}
-            onComplete={handleComplete}
+            onCompleteActivity={handleComplete}
             onProgressUpdate={handleProgressUpdate}
-            onJumpToContext={onJumpToContext}
+            onNext={handleNext}
+            studentId={String(studentId)}
+            planId={data.planId}
+            dayIndex={data.dayIndex}
           />
         );
       case 'where':
         return (
           <WhereActivityEnhanced
             content={{ type: 'where', content: activities.where! }}
-            progress={progress.where}
-            onComplete={handleComplete}
+            studentId={String(studentId)}
+            planId={data.planId}
+            dayIndex={data.dayIndex}
+            onCompleteActivity={handleComplete}
             onProgressUpdate={handleProgressUpdate}
-            onJumpToContext={onJumpToContext}
+            onNext={handleNext}
           />
         );
       case 'sequence':
@@ -168,6 +324,10 @@ const EnhancedActivityPane: React.FC<EnhancedActivityPaneProps> = ({
             onComplete={handleComplete}
             onProgressUpdate={handleProgressUpdate}
             onJumpToContext={onJumpToContext}
+            onNext={handleNext}
+            studentId={String(studentId)}
+            planId={data.planId}
+            dayIndex={data.dayIndex}
           />
         );
       case 'main-idea':
@@ -198,6 +358,8 @@ const EnhancedActivityPane: React.FC<EnhancedActivityPaneProps> = ({
             onComplete={handleComplete}
             onProgressUpdate={handleProgressUpdate}
             onJumpToContext={onJumpToContext}
+            planId={data.planId}
+            dayIndex={data.dayIndex}
           />
         );
       default:
@@ -205,99 +367,68 @@ const EnhancedActivityPane: React.FC<EnhancedActivityPaneProps> = ({
     }
   };
 
+  // After rehydration, determine which activity to show
+  useEffect(() => {
+    if (!steps || steps.length === 0) return;
+    
+    // Check if all activities are completed
+    const allCompleted = steps.every(s => s.isCompleted);
+    if (allCompleted) {
+      // If all activities are completed, go to the last activity and clear localStorage
+      setCurrentIndex(steps.length - 1);
+      try {
+        localStorage.removeItem(currentIndexStorageKey);
+      } catch (error) {
+        console.warn('Failed to clear current activity index from localStorage:', error);
+      }
+      return;
+    }
+    
+    // If current activity is completed, find the next incomplete activity
+    if (steps[currentIndex]?.isCompleted) {
+      const nextIncompleteIndex = steps.findIndex((s, index) => index >= currentIndex && !s.isCompleted);
+      if (nextIncompleteIndex >= 0) {
+        setCurrentIndex(nextIncompleteIndex);
+      } else {
+        // If all activities after current are completed, go to the last activity
+        setCurrentIndex(steps.length - 1);
+      }
+    }
+    // If no saved activity or current activity is not completed, stay on current
+    // (which was restored from localStorage or defaults to 0)
+  }, [steps, currentIndex, currentIndexStorageKey]);
+
   return (
-    <div className={`space-y-6 ${className}`}>
-      <ActivityStepper steps={steps} currentIndex={currentIndex} onStepClick={onStepClick} />
-      {studentId && (
-        <div className="text-xs text-gray-600 space-y-1">
-          {isOffline ? 'Offline - changes will sync when back online' : (isSaving ? 'Syncing…' : '')}
-          {restorationMessage && (
-            <div className={`text-sm px-3 py-2 rounded-lg border ${
-              isRestoring 
-                ? 'bg-blue-50 border-blue-200 text-blue-800' 
-                : restoredFrom === 'server'
-                ? 'bg-green-50 border-green-200 text-green-800'
-                : restoredFrom === 'session'
-                ? 'bg-purple-50 border-purple-200 text-purple-800'
-                : 'bg-yellow-50 border-yellow-200 text-yellow-800'
-            }`}>
-              <div className="flex items-center">
-                {isRestoring ? (
-                  <svg className="w-4 h-4 mr-2 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                  </svg>
-                ) : restoredFrom === 'server' ? (
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-                  </svg>
-                ) : restoredFrom === 'session' ? (
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                  </svg>
-                ) : (
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
-                  </svg>
-                )}
-                {restorationMessage}
-              </div>
+    <div className={`w-full h-full overflow-auto ${className}`}>
+      <div className="px-4 py-6 max-w-4xl mx-auto">
+        {/* Activity Steps - Above the container */}
+        <div className="mb-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Activities</h2>
+          <ActivityStepper 
+            steps={steps} 
+            currentIndex={currentIndex} 
+            onStepClick={onStepClick}
+            showProgress={false} // Remove progress bar
+          />
+        </div>
+
+        {/* Activity Container */}
+        <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-6">
+          {/* Current Activity Content */}
+          {renderCurrentActivity()}
+          
+          {isLoading && (
+            <div role="status" aria-live="polite" className="px-4 py-3 rounded bg-gray-50 border border-gray-200 text-gray-700">
+              Loading activity...
             </div>
           )}
-          
-          {/* Session Management Status */}
-          {sessionInterrupted && (
-            <div className="bg-orange-50 border border-orange-200 text-orange-800 px-3 py-2 rounded-lg">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
-                  </svg>
-                  <span className="text-sm">Previous session was interrupted</span>
-                </div>
-                <button
-                  onClick={handleSessionRecovery}
-                  className="text-xs bg-orange-100 hover:bg-orange-200 px-2 py-1 rounded transition-colors"
-                >
-                  Recover
-                </button>
-              </div>
-            </div>
-          )}
-          
-          {sessionRecovered && (
-            <div className="bg-green-50 border border-green-200 text-green-800 px-3 py-2 rounded-lg">
-              <div className="flex items-center">
-                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-                </svg>
-                <span className="text-sm">Session recovered successfully</span>
-              </div>
-            </div>
-          )}
-          
-          {/* Session Information */}
-          {sessionInfo.sessionId !== 'N/A' && (
-            <div className="bg-gray-50 border border-gray-200 text-gray-700 px-3 py-2 rounded-lg">
-              <div className="flex items-center justify-between text-xs">
-                <span>Session: {sessionInfo.sessionId.substring(0, 8)}...</span>
-                <span>Time: {Math.floor(sessionInfo.totalTimeSpent / 60)}m {sessionInfo.totalTimeSpent % 60}s</span>
-                <span>Activities: {sessionInfo.activityCount}</span>
-              </div>
+          {error && (
+            <div role="alert" className="px-4 py-3 rounded bg-red-50 border border-red-200 text-red-700">
+              {error}
             </div>
           )}
         </div>
-      )}
-      {isLoading && (
-        <div role="status" aria-live="polite" className="px-4 py-3 rounded bg-gray-50 border border-gray-200 text-gray-700">
-          Loading activity...
-        </div>
-      )}
-      {error && (
-        <div role="alert" className="px-4 py-3 rounded bg-red-50 border border-red-200 text-red-700">
-          {error}
-        </div>
-      )}
-      <div>{renderActivity()}</div>
+      </div>
     </div>
   );
 };

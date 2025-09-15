@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import api from '@/lib/api';
 import { Assessment } from '@/types/assessment';
+import GenericSplitLayout from '@/components/layout/GenericSplitLayout';
+import AssessmentQuestionPane from '@/components/assessment/AssessmentQuestionPane';
 
 interface Question {
   type: 'comprehension' | 'vocabulary';
@@ -71,15 +73,36 @@ export default function AssessmentQuestionsPage() {
   const handleSubmit = async () => {
     if (!assessment) return;
 
-    const readingTime = searchParams.get('readingTime');
-    const errorCount = searchParams.get('errorCount');
+    // Get reading time and error count from URL params, with localStorage fallback
+    let readingTime = searchParams.get('readingTime');
+    let errorCount = searchParams.get('errorCount');
+    
+    console.log('Assessment submission - URL params:', { readingTime, errorCount });
+    
+    // If URL params are missing, try localStorage as fallback
+    if (!readingTime || !errorCount) {
+      const storedReadingTime = localStorage.getItem(`assessment_${assessment.id}_readingTime`);
+      const storedErrorCount = localStorage.getItem(`assessment_${assessment.id}_errorCount`);
+      
+      console.log('Using localStorage fallback:', { storedReadingTime, storedErrorCount });
+      
+      readingTime = readingTime || storedReadingTime || '0';
+      errorCount = errorCount || storedErrorCount || '0';
+    }
+    
+    console.log('Final values being submitted:', { readingTime, errorCount });
 
     try {
       await api.put(`/assessments/${assessment.id}/submit`, {
-        readingTime: parseInt(readingTime || '0', 10),
-        errorCount: parseInt(errorCount || '0', 10),
+        readingTime: parseInt(readingTime, 10),
+        errorCount: parseInt(errorCount, 10),
         answers,
       });
+      
+      // Clean up localStorage after successful submission
+      localStorage.removeItem(`assessment_${assessment.id}_readingTime`);
+      localStorage.removeItem(`assessment_${assessment.id}_errorCount`);
+      
       router.push(`/assessment/${assessment.id}/results`);
     } catch (err: any) {
       // Handle specific error cases
@@ -98,6 +121,10 @@ export default function AssessmentQuestionsPage() {
         setError('Failed to submit answers');
       }
     }
+  };
+
+  const handleBack = () => {
+    router.push('/dashboard');
   };
 
   if (loading) {
@@ -152,101 +179,54 @@ export default function AssessmentQuestionsPage() {
   }
 
   const questions = assessment.questions as Question[];
-  const currentQuestion = questions[currentQuestionIndex];
-  const isLastQuestion = currentQuestionIndex === questions.length - 1;
-  const firstName = assessment?.student?.name?.split(' ')[0] || assessment?.student?.name;
+  const firstName = assessment?.student?.name?.split(' ')[0] || assessment?.student?.name || 'Student';
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-4xl mx-auto px-4 py-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">
-              {firstName}&apos;s Reading Assessment
-            </h1>
-            <p className="text-gray-600">
-              Let&apos;s check {firstName}&apos;s understanding of the passage
+    <GenericSplitLayout
+      readingContent={
+        <div className="h-full flex items-center justify-center p-6">
+          <div className="text-center max-w-md">
+            <div className="mb-4">
+              <svg className="w-16 h-16 text-gray-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              Reading Complete
+            </h3>
+            <p className="text-gray-600 text-sm">
+              Great job! Now let's answer some questions about what you read.
             </p>
           </div>
         </div>
-      </div>
-
-      {/* Question Content */}
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="bg-white rounded-lg shadow-sm border p-8">
-          {/* Progress */}
-          <div className="mb-8">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-sm font-medium text-gray-600">
-                Question {currentQuestionIndex + 1} of {questions.length}
-              </span>
-              <span className="text-sm font-medium text-gray-600">
-                {currentQuestion.type === 'comprehension' ? 'Comprehension' : 'Vocabulary'}
-              </span>
-            </div>
-            <div className="h-2 bg-gray-200 rounded-full">
-              <div
-                className="h-2 bg-blue-600 rounded-full transition-all duration-300"
-                style={{ width: `${((currentQuestionIndex + 1) / questions.length) * 100}%` }}
-              />
-            </div>
-          </div>
-
-          {/* Question */}
-          <div className="mb-8">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">
-              {currentQuestion.text || currentQuestion.question || 'Question text not available'}
-            </h2>
-            <div className="space-y-4">
-              {currentQuestion.options.map((option, index) => {
-                const letter = String.fromCharCode(65 + index); // A, B, C, D
-                const isSelected = answers[currentQuestionIndex] === letter;
-
-                return (
-                  <button
-                    key={index}
-                    onClick={() => handleAnswer(letter)}
-                    className={`w-full text-left p-4 rounded-lg border transition-colors ${
-                      isSelected
-                        ? 'bg-blue-50 border-blue-500 text-blue-700'
-                        : 'border-gray-200 hover:border-blue-500 hover:bg-blue-50'
-                    }`}
-                  >
-                    <span className="font-medium">{letter}.</span> {option}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Navigation */}
-          <div className="flex justify-between items-center">
-            <button
-              onClick={handlePrevious}
-              disabled={currentQuestionIndex === 0}
-              className={`px-6 py-3 rounded-lg font-medium transition-colors ${
-                currentQuestionIndex === 0
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              Previous
-            </button>
-            <button
-              onClick={handleNext}
-              disabled={!answers[currentQuestionIndex]}
-              className={`px-6 py-3 rounded-lg font-medium transition-colors ${
-                !answers[currentQuestionIndex]
-                  ? 'bg-blue-300 text-white cursor-not-allowed'
-                  : 'bg-blue-600 text-white hover:bg-blue-700'
-              }`}
-            >
-              {isLastQuestion ? 'Submit Answers' : 'Next Question'}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+      }
+      activityContent={
+        <AssessmentQuestionPane
+          questions={questions}
+          currentQuestionIndex={currentQuestionIndex}
+          answers={answers}
+          onAnswer={handleAnswer}
+          onNext={handleNext}
+          onPrevious={handlePrevious}
+          readingCompleted={true}
+          studentName={firstName}
+          onQuestionIndexChange={setCurrentQuestionIndex}
+        />
+      }
+      title="Reading Assessment"
+      subtitle={firstName}
+      onBack={handleBack}
+      defaultView="activity"
+      printConfig={{
+        readingPrintable: false,
+        activitiesPrintable: false
+      }}
+      splitConfig={{
+        defaultSplitValue: 0.3, // Give more space to questions
+        minLeftWidth: 300,
+        minRightWidth: 500,
+        showDivider: true
+      }}
+    />
   );
 }

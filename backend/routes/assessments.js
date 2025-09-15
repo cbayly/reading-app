@@ -49,22 +49,36 @@ router.post('/', authenticate, modelOverrideMiddleware(), async (req, res) => {
       });
     }
 
-    // Generate new assessment content from OpenAI with model override if provided
+    // Generate assessment content from OpenAI (passage + questions)
     const modelOverride = req.modelOverride ? req.applyModelOverride('assessment_creation', getModelConfigWithOverride(req, 'assessment_creation')) : null;
     const assessmentContent = await generateAssessment(student, modelOverride);
 
-    // Create new assessment in the database
+    // Create assessment immediately with passage only; questions will be saved in background
     const assessment = await prisma.assessment.create({
       data: {
         studentId,
         status: 'in_progress',
         passage: assessmentContent.passage,
-        questions: assessmentContent.questions,
+        questions: null,
       }
     });
 
+    // Fire-and-forget: persist questions after response so reading can start sooner
+    setImmediate(async () => {
+      try {
+        await prisma.assessment.update({
+          where: { id: assessment.id },
+          data: { questions: assessmentContent.questions }
+        });
+        console.log(`💾 Questions generated and saved for assessment ${assessment.id}`);
+      } catch (e) {
+        console.error('Failed to save assessment questions in background:', e);
+      }
+    });
+
+    // Respond with passage now; frontend will poll for questions
     res.status(201).json({
-      assessment,
+      assessment: { ...assessment, questions: null },
       resumed: false
     });
   } catch (error) {
@@ -180,6 +194,46 @@ router.get('/:id', authenticate, async (req, res) => {
   } catch (error) {
     console.error('Assessment fetch error:', error);
     res.status(500).json({ message: 'An error occurred while fetching the assessment' });
+  }
+});
+
+// PUT /api/assessments/:id/reading
+// Persist interim reading metrics so they survive refresh and can be resumed later
+router.put('/:id/reading', authenticate, async (req, res) => {
+  const { id } = req.params;
+  const { readingTime, errorCount } = req.body;
+  const parentId = req.user.id;
+
+  if (typeof readingTime !== 'number' || readingTime < 0) {
+    return res.status(400).json({ message: 'Valid readingTime (seconds) is required' });
+  }
+
+  try {
+    // Verify ownership
+    const assessment = await prisma.assessment.findFirst({
+      where: {
+        id: parseInt(id),
+        student: { parentId },
+      },
+    });
+
+    if (!assessment) {
+      return res.status(404).json({ message: 'Assessment not found' });
+    }
+
+    const updated = await prisma.assessment.update({
+      where: { id: parseInt(id) },
+      data: {
+        readingTime,
+        errorCount: typeof errorCount === 'number' ? errorCount : assessment.errorCount,
+      },
+      select: { id: true, readingTime: true, errorCount: true },
+    });
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Assessment reading update error:', error);
+    res.status(500).json({ message: 'An error occurred while saving reading progress' });
   }
 });
 

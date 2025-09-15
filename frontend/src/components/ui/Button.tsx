@@ -2,10 +2,14 @@ import React from 'react';
 
 type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: 'primary' | 'secondary' | 'destructive';
+  noFocusRing?: boolean;
 };
 
-export function Button({ className, variant = 'primary', ...props }: ButtonProps) {
-  const baseClasses = 'px-4 py-2 rounded-lg shadow-md transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2';
+export function Button({ className, variant = 'primary', noFocusRing = false, ...props }: ButtonProps) {
+  const baseFocus = noFocusRing
+    ? 'focus:outline-none focus:ring-0 focus:ring-offset-0'
+    : 'focus:outline-none focus:ring-2 focus:ring-offset-2';
+  const baseClasses = `px-4 py-2 rounded-lg shadow-md transition-colors duration-300 ${baseFocus}`;
   const variantClasses = {
     primary: 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500',
     secondary: 'bg-gray-200 text-gray-800 hover:bg-gray-300 focus:ring-gray-500',

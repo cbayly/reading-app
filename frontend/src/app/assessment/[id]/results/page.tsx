@@ -92,9 +92,8 @@ export default function AssessmentResultsPage() {
     }
   }, [params.id]);
 
-  const handlePrint = () => {
-    window.print();
-  };
+
+  // Removed print support per requirements
 
   const handleCreateWeeklyPlan = async () => {
     if (!assessment?.student?.id) {
@@ -104,20 +103,27 @@ export default function AssessmentResultsPage() {
 
     setCreatingPlan(true);
     try {
-      const response = await api.post('/plans/generate', { 
-        studentId: assessment.student.id 
+      // Use Plan3 endpoint (3-day plan)
+      const firstName = assessment?.student?.name?.split(' ')[0] || 'Student';
+      const planName = `${firstName}'s 3-Day Reading Plan`;
+      const theme = 'General Reading';
+
+      const response = await api.post('/plan3', {
+        studentId: assessment.student.id,
+        name: planName,
+        theme
       });
       
       if (response.data && response.data.plan && response.data.plan.id) {
         setPlanCreated(true);
-        // Navigate to the weekly plan page
-        router.push(`/plan/${response.data.plan.id}`);
+        // Navigate to the 3-day plan page
+        router.push(`/plan3/${response.data.plan.id}`);
       } else {
         throw new Error('Invalid response format from server');
       }
     } catch (err) {
-      console.error('Error creating weekly plan:', err);
-      setError('Failed to create weekly plan. Please try again.');
+      console.error('Error creating plan:', err);
+      setError('Failed to create plan. Please try again.');
     } finally {
       setCreatingPlan(false);
     }
@@ -202,26 +208,31 @@ export default function AssessmentResultsPage() {
   );
 
   const firstName = assessment?.student?.name?.split(' ')[0] || assessment?.student?.name;
+  const printedOn = new Date().toLocaleDateString();
+
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-4xl mx-auto px-4 py-4">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">
-                {firstName}&apos;s Reading Results
-              </h1>
-              <p className="text-gray-600">
-                Here&apos;s how {firstName} did on their assessment
-              </p>
-            </div>
+      {/* Screen-only toolbar */}
+      <div className="bg-white shadow-sm border-b no-print">
+        <div className="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">
+              {firstName}&apos;s Reading Results
+            </h1>
+            <p className="text-gray-600">
+              Here&apos;s how {firstName} did on their assessment
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => router.back()} className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300">Back</button>
           </div>
         </div>
       </div>
 
+      {/* Print header removed */}
+
       {/* Results Content */}
-      <div className="max-w-4xl mx-auto px-4 py-8">
+      <div className="max-w-4xl mx-auto px-4 py-8 print-content">
         <div className="bg-white rounded-lg shadow-sm border p-8">
           {/* Overall Score */}
           <div className="mb-12 text-center">
@@ -230,7 +241,7 @@ export default function AssessmentResultsPage() {
                 {assessment.compositeScore || 0}
               </div>
               <div className="text-sm text-blue-800">Composite Score</div>
-              {/* Tooltip */}
+              {/* Tooltip: hidden in print via global rules */}
               <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
                 <div className="font-semibold mb-1">Composite Score Breakdown:</div>
                 <div>• Fluency Score: {assessment.fluencyScore?.toFixed(1) || 'N/A'}</div>
@@ -338,7 +349,7 @@ export default function AssessmentResultsPage() {
                 <>
                   <button
                     onClick={() => setShowQuestionAnalysis(!showQuestionAnalysis)}
-                    className="w-full flex justify-between items-center text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors mb-4"
+                    className="w-full flex justify-between items-center text-left p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors mb-4 no-print"
                   >
                     <div>
                       <h3 className="text-lg font-semibold text-gray-900">
@@ -370,7 +381,7 @@ export default function AssessmentResultsPage() {
                     </div>
                   </button>
                   
-                  {showQuestionAnalysis && (
+                  {(showQuestionAnalysis) && (
                     <div className="space-y-4">
                       {questions.map((question, index) => {
                         const isCorrect = answers[index] === question.correctAnswer;
@@ -450,42 +461,93 @@ export default function AssessmentResultsPage() {
             })()}
           </div>
 
-          {/* Weekly Plan Creation */}
-          <div className="mt-8 pt-8 border-t border-gray-200">
+          {/* Plan Generation Status */}
+          <div className="mt-8 pt-8 border-t border-gray-200 no-print">
             <div className="text-center">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
                 Next Steps
               </h3>
-              <p className="text-gray-600 mb-6">
-                Based on {firstName}&apos;s assessment results, you can now create a personalized weekly reading plan.
-              </p>
               
+              <div className="text-gray-600 mb-6">
+                <p>Ready to start your reading journey?</p>
+                <p className="text-sm mt-2">Create a personalized 3-day reading plan based on your assessment results.</p>
+              </div>
+
               <button
                 onClick={handleCreateWeeklyPlan}
-                disabled={creatingPlan || planCreated}
+                disabled={creatingPlan}
                 className={`px-6 py-3 rounded-lg font-medium transition-colors ${
-                  creatingPlan || planCreated
+                  creatingPlan
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-green-600 text-white hover:bg-green-700'
+                    : 'bg-blue-600 text-white hover:bg-blue-700'
                 }`}
               >
                 {creatingPlan ? (
                   <div className="flex items-center">
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Creating Weekly Plan...
-                  </div>
-                ) : planCreated ? (
-                  <div className="flex items-center">
-                    <span className="mr-2">✓</span>
-                    Weekly Plan Created!
+                    Creating Plan...
                   </div>
                 ) : (
                   <div className="flex items-center">
                     <span className="mr-2">📚</span>
-                    Create Weekly Reading Plan
+                    Create Reading Plan
                   </div>
                 )}
               </button>
+              
+              
+              {false && (
+                <div className="text-green-600 mb-6">
+                  <div className="flex items-center justify-center mb-2">
+                    <span className="text-2xl mr-2">✅</span>
+                    <span className="text-lg font-semibold">Plan Ready!</span>
+                  </div>
+                  <p className="text-gray-600">Your personalized 3-day reading plan is ready to use.</p>
+                </div>
+              )}
+              
+              {false && (
+                <div className="text-red-600 mb-6">
+                  <p>Plan generation failed. You can try creating a plan manually.</p>
+                </div>
+              )}
+              
+              {/* Action Buttons */}
+              {false && (
+                <button
+                  onClick={() => router.push(`/plan3/${planId}`)}
+                  className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
+                >
+                  <div className="flex items-center">
+                    <span className="mr-2">🚀</span>
+                    Start Your 3-Day Reading Plan
+                  </div>
+                </button>
+              )}
+              
+              {false && (
+                <button
+                  onClick={handleCreateWeeklyPlan}
+                  disabled={creatingPlan}
+                  className={`px-6 py-3 rounded-lg font-medium transition-colors ${
+                    creatingPlan
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}
+                >
+                  {creatingPlan ? (
+                    <div className="flex items-center">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Creating Plan...
+                    </div>
+                  ) : (
+                    <div className="flex items-center">
+                      <span className="mr-2">📚</span>
+                      Create Plan Manually
+                    </div>
+                  )}
+                </button>
+              )}
               
               {error && (
                 <p className="text-red-600 mt-4 text-sm">
@@ -494,7 +556,7 @@ export default function AssessmentResultsPage() {
               )}
               
               <p className="text-sm text-gray-500 mt-4">
-                The weekly plan will be tailored to {firstName}&apos;s reading level and interests.
+                The plan will be tailored to {firstName}&apos;s reading level and interests.
               </p>
             </div>
           </div>

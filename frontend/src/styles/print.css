@@ -1,9 +1,17 @@
 /* Print styles */
 @media print {
-  /* Hide non-printable elements */
-  .no-print {
-    display: none !important;
+  /* Hide everything by default, then whitelist the passage */
+  body * {
+    visibility: hidden !important;
   }
+
+  /* Ensure only the passage area prints */
+  .print-content, .print-content * {
+    visibility: visible !important;
+  }
+
+  /* Hide any explicit no-print blocks */
+  .no-print { display: none !important; }
 
   /* Reset background colors and borders */
   .print-content {
@@ -11,6 +19,35 @@
     border: none !important;
     padding: 0 !important;
     margin: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    position: static !important;
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  /* Ensure scroll containers expand fully on print */
+  .reading-content,
+  .reading-content * {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+  }
+
+  /* Passage should not be clipped */
+  .reading-passage {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  /* Allow paragraphs to break across pages, avoid clipping */
+  .reading-passage p {
+    break-inside: auto !important;
+    page-break-inside: auto !important;
+    overflow: visible !important;
   }
 
   /* Style the passage for print */

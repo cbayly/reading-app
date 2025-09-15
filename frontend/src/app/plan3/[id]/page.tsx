@@ -31,7 +31,7 @@ interface Plan3 {
   studentId: number;
   name: string;
   theme: string;
-  status: string;
+  status: string; // may be 'generating', 'active', 'failed', 'completed'
   createdAt: string;
   updatedAt: string;
   student: {
@@ -44,8 +44,8 @@ interface Plan3 {
     createdAt: string;
     updatedAt: string;
   };
-  story: Plan3Story;
-  days: Plan3Day[];
+  story?: Plan3Story | null;
+  days?: Plan3Day[];
 }
 
 export default function Plan3Page() {
@@ -55,51 +55,60 @@ export default function Plan3Page() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchPlan = async () => {
-      try {
-        const planData = await getPlan3ById(params.id as string);
-        setPlan(planData);
-      } catch (err: any) {
-        console.log('Error fetching plan:', err);
-        if (err?.response?.status === 404) {
-          setError('Plan not found. Please create a new plan from the dashboard.');
-        } else if (err instanceof Error) {
-          setError(err.message);
-        } else {
-          setError('Failed to load plan');
-        }
-      } finally {
-        setLoading(false);
+  const fetchPlan = useCallback(async () => {
+    try {
+      const planData = await getPlan3ById(params.id as string);
+      setPlan(planData);
+    } catch (err: any) {
+      console.log('Error fetching plan:', err);
+      if (err?.response?.status === 404) {
+        setError('Plan not found. Please create a new plan from the dashboard.');
+      } else if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('Failed to load plan');
       }
-    };
+    } finally {
+      setLoading(false);
+    }
+  }, [params.id]);
 
+  useEffect(() => {
     if (params.id) {
       fetchPlan();
     }
-  }, [params.id]);
+  }, [params.id, fetchPlan]);
+
+  // Poll while plan is generating
+  useEffect(() => {
+    if (!plan) return;
+    if (plan.status === 'generating') {
+      const interval = setInterval(() => {
+        fetchPlan();
+      }, 2000);
+      return () => clearInterval(interval);
+    }
+  }, [plan, fetchPlan]);
 
   const handleBackToDashboard = () => {
     router.push('/dashboard');
   };
 
   const handleDayClick = (day: Plan3Day) => {
-    if (day.state === 'locked') {
-      return;
-    }
+    if (day.state === 'locked') return;
     router.push(`/plan3/${plan?.id}/day/${day.index}`);
   };
 
   const getCompletedDays = () => {
-    return plan?.days.filter(day => day.state === 'complete').length || 0;
+    return plan?.days?.filter(day => day.state === 'complete').length || 0;
   };
 
   const getTotalDays = () => {
-    return plan?.days.length || 0;
+    return plan?.days?.length || 0;
   };
 
   const getProgressPercentage = () => {
-    if (!plan?.days.length) return 0;
+    if (!plan?.days || plan.days.length === 0) return 0;
     return Math.round((getCompletedDays() / getTotalDays()) * 100);
   };
 
@@ -154,10 +163,10 @@ export default function Plan3Page() {
         };
       case 'complete':
         return {
-          card: 'bg-green-50 border-green-300 cursor-pointer hover:shadow-md transition-all duration-200',
-          icon: 'text-green-600',
-          title: 'text-gray-900',
-          description: 'text-gray-600',
+          card: 'bg-gray-100 border-gray-300 cursor-pointer',
+          icon: 'text-gray-400',
+          title: 'text-gray-500',
+          description: 'text-gray-400',
           status: 'text-green-700 bg-green-100'
         };
       default:
@@ -237,132 +246,104 @@ export default function Plan3Page() {
     );
   }
 
+  const storyTitle = plan.story?.title || '';
+  const days = plan.days || [];
+
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-6xl mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <h1 className="text-2xl font-bold text-gray-900">{plan.name}</h1>
-              <p className="text-gray-600 mt-1">{plan.student.name}'s {plan.theme} Adventure</p>
-              
-              {/* Progress Bar */}
-              <div className="mt-4">
-                <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
-                  <span>Day {getCompletedDays()} of {getTotalDays()} completed</span>
-                  <span>{getProgressPercentage()}% complete</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div 
-                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${getProgressPercentage()}%` }}
-                  />
-                </div>
-              </div>
-              
-              <div className="mt-4 flex items-center space-x-6 text-sm">
-                <span className="text-blue-600">Status: {plan.status}</span>
-                <span className="text-gray-600">Story: {plan.story.title}</span>
-              </div>
+      <div className="max-w-6xl mx-auto px-4 py-8">
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">{plan.name}</h1>
+          <p className="text-gray-600 mb-4">{plan.student.name}'s {plan.theme} Adventure</p>
+
+          <div className="mb-4">
+            <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
+              <span>Day {getCompletedDays()} of {getTotalDays()} completed</span>
+              <span>{getProgressPercentage()}% complete</span>
             </div>
-            
-            <div className="text-right">
-              <div className="text-sm text-gray-500 mb-2">
-                Created: {new Date(plan.createdAt).toLocaleDateString()}
-              </div>
-              <button
-                onClick={handleBackToDashboard}
-                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-              >
-                Back to Dashboard
-              </button>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div
+                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${getProgressPercentage()}%` }}
+              />
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* Main Content */}
-      <div className="max-w-6xl mx-auto px-4 py-8">
+          <div className="flex items-center space-x-6 text-sm">
+            <span className="text-blue-600 flex items-center">
+              <span>Status: {plan.status === 'generating' ? 'generating' : plan.status}</span>
+              {plan.status === 'generating' && (
+                <span className="ml-2 inline-flex">
+                  <span className="h-3 w-3 mr-1 rounded-full bg-blue-400 animate-pulse"></span>
+                  <span className="h-3 w-3 mr-1 rounded-full bg-blue-300 animate-pulse [animation-delay:150ms]"></span>
+                  <span className="h-3 w-3 rounded-full bg-blue-200 animate-pulse [animation-delay:300ms]"></span>
+                </span>
+              )}
+            </span>
+            {storyTitle && <span className="text-gray-600">Story: {storyTitle}</span>}
+          </div>
+        </div>
+
+        {plan.status !== 'generating' && (
         <div className="space-y-4">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">
             Your 3-Day Reading Journey
           </h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {plan.days.map((day) => {
-              const styles = getStateStyles(day.state);
-              const isClickable = day.state !== 'locked';
-              
-              return (
-                <div
-                  key={day.id}
-                  className={`border-2 rounded-lg p-4 ${styles.card} ${
-                    isClickable ? 'hover:scale-105' : ''
-                  }`}
-                  onClick={() => handleDayClick(day)}
-                >
-                  {/* Day Icon and Number */}
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-2xl">{getDayIcon(day.index)}</span>
-                    <span className={`text-xs font-medium px-2 py-1 rounded-full ${styles.status}`}>
-                      {getStatusText(day)}
-                    </span>
-                  </div>
-                  
-                  {/* Day Title */}
-                  <h3 className={`font-semibold text-sm mb-2 ${styles.title}`}>
-                    {getDayTitle(day.index)}
-                  </h3>
-                  
-                  {/* Day Description */}
-                  <p className={`text-xs mb-3 ${styles.description}`}>
-                    {getDayDescription(day.index)}
-                  </p>
-                  
-                  {/* Locked Day Message */}
-                  {day.state === 'locked' && (
-                    <div className="mt-3 pt-3 border-t border-gray-200">
-                      <p className="text-xs text-gray-400 italic">
-                        Complete previous days to unlock
-                      </p>
-                    </div>
-                  )}
-                  
-                  {/* Available Day CTA */}
-                  {day.state === 'available' && (
-                    <div className="mt-3 pt-3 border-t border-gray-200">
-                      <p className="text-xs text-blue-600 font-medium">
-                        Click to start →
-                      </p>
-                    </div>
-                  )}
 
-                  {/* Complete Day Message */}
-                  {day.state === 'complete' && (
-                    <div className="mt-3 pt-3 border-t border-gray-200">
-                      <p className="text-xs text-green-600 font-medium">
-                        ✓ Completed
-                      </p>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Progress Summary */}
-        <div className="mt-8 p-4 bg-white rounded-lg border">
-          <h3 className="font-semibold text-gray-900 mb-2">Progress Summary</h3>
-          <div className="flex items-center justify-between">
-            <span className="text-blue-600">{getCompletedDays()} of {getTotalDays()} days completed</span>
-            <div className="text-right">
-              <div className="text-2xl font-bold text-blue-600">{getProgressPercentage()}%</div>
-              <div className="text-sm text-blue-600">Complete</div>
+          {days.length === 0 ? (
+            <div className="p-6 border rounded-lg bg-gray-50 text-gray-600">
+              No days are available yet. Please wait while the plan is being prepared.
             </div>
-          </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {days.map((day) => {
+                const styles = getStateStyles(day.state);
+                const isClickable = day.state !== 'locked';
+                const shouldAnimate = day.state === 'available';
+
+                return (
+                  <div
+                    key={day.id}
+                    className={`border-2 rounded-lg p-4 ${styles.card} ${shouldAnimate ? 'hover:scale-105' : ''}`}
+                    onClick={() => handleDayClick(day)}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-2xl">{getDayIcon(day.index)}</span>
+                      <span className={`text-xs font-medium px-2 py-1 rounded-full ${styles.status}`}>
+                        {getStatusText(day)}
+                      </span>
+                    </div>
+
+                    <h3 className={`font-semibold text-sm mb-2 ${styles.title}`}>
+                      {getDayTitle(day.index)}
+                    </h3>
+
+                    <p className={`text-xs mb-3 ${styles.description}`}>
+                      {getDayDescription(day.index)}
+                    </p>
+
+                    <div className="mt-3 pt-3 border-t border-gray-200">
+                      {day.state === 'locked' ? (
+                        <p className="text-xs text-gray-400 italic">Complete previous days to unlock</p>
+                      ) : (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDayClick(day);
+                          }}
+                          className="text-xs text-green-600 font-medium hover:underline"
+                        >
+                          Start Day →
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
+        )}
       </div>
     </div>
   );

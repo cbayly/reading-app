@@ -1,11 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getPlan3ById, getPlan3DayDetails } from '@/lib/api';
-import LayoutBar, { LayoutMode } from '@/components/layout/LayoutBar';
+import api from '@/lib/api';
+import GenericSplitLayout from '@/components/layout/GenericSplitLayout';
 import EnhancedReadingPane from '@/components/reading/EnhancedReadingPane';
-import ActivityPane, { Activity } from '@/components/activities/ActivityPane';
+import Plan3ActivityWrapper from '@/components/activities/Plan3ActivityWrapper';
+import { LayoutMode } from '@/components/layout/LayoutBar';
 
 interface Plan3Day {
   id: string;
@@ -52,7 +54,7 @@ interface Plan3 {
 
 interface DayDetails {
   day: Plan3Day;
-  activities: Activity[];
+  activities: any[]; // Updated to use enhanced activity format
   chapter: string;
 }
 
@@ -62,27 +64,74 @@ export default function Plan3DayPage() {
   const [plan, setPlan] = useState<Plan3 | null>(null);
   const [dayDetails, setDayDetails] = useState<DayDetails | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activitiesLoading, setActivitiesLoading] = useState(false);
+  const [showActivityReady, setShowActivityReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [layoutMode, setLayoutMode] = useState<LayoutMode>('reading');
-  const [activityResponses, setActivityResponses] = useState<Record<string, any>>({});
+  const [defaultView, setDefaultView] = useState<LayoutMode>('reading');
+  const scrollToAnchorRef = useRef<null | ((anchorId: string, options?: any) => boolean)>(null);
 
   const planId = params.id as string;
   const dayIndex = Number(params.index);
 
+  // Function to check if any activities are completed
+  const checkForCompletedActivities = async (planId: string, dayIndex: number): Promise<boolean> => {
+    try {
+      const { data: enhancedData } = await api.get(`/enhanced-activities/${planId}/${dayIndex}`);
+      const progress = enhancedData?.progress || {};
+      
+      // Check if any activity has status 'completed'
+      const activityTypes = ['who', 'where', 'sequence', 'main-idea', 'vocabulary', 'predict'];
+      return activityTypes.some(activityType => progress[activityType]?.status === 'completed');
+    } catch (error) {
+      console.warn('Failed to check activity completion status:', error);
+      return false;
+    }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch plan data
+        setLoading(true);
+        setActivitiesLoading(false);
+        setShowActivityReady(false);
+        
+        // Fetch plan data first (this includes the story content)
         const planData = await getPlan3ById(planId);
         setPlan(planData);
         
-        // Fetch day details with activities
-        const dayData = await getPlan3DayDetails(planId, dayIndex);
-        setDayDetails(dayData);
+        // Set loading to false so reading view can be shown immediately
+        setLoading(false);
         
-        // Initialize activity responses from existing answers
-        if (dayData.day.answers) {
-          setActivityResponses(dayData.day.answers);
+        // Begin activities fetch and disable Split/Activity immediately
+        setActivitiesLoading(true);
+        const startTime = Date.now();
+
+        // Fetch day details (this may trigger generation on the backend)
+        const dayData = await getPlan3DayDetails(planId, dayIndex);
+        const loadTime = Date.now() - startTime;
+
+        // Check if any activities are completed to determine default view
+        const hasCompletedActivities = await checkForCompletedActivities(planId, dayIndex);
+        setDefaultView(hasCompletedActivities ? 'split' : 'reading');
+
+        // Update UI with fetched activities
+        setDayDetails(dayData);
+
+        // If activities were cached (fast load), remove the loading state quickly
+        if (loadTime <= 1000) {
+          setActivitiesLoading(false);
+        } else {
+          // Keep the loading state visible for a minimum duration for UX feedback
+          const minLoadingTime = 1500;
+          const remainingTime = Math.max(0, minLoadingTime - loadTime);
+          if (remainingTime > 0) {
+            await new Promise(resolve => setTimeout(resolve, remainingTime));
+          }
+          // Notify only when generation likely occurred
+          if (loadTime > 2000) {
+            setShowActivityReady(true);
+            setTimeout(() => setShowActivityReady(false), 3000);
+          }
         }
       } catch (err: any) {
         console.log('Error fetching data:', err);
@@ -93,8 +142,10 @@ export default function Plan3DayPage() {
         } else {
           setError('Failed to load plan data');
         }
-      } finally {
         setLoading(false);
+      } finally {
+        // Ensure we don't leave the loader stuck on
+        setActivitiesLoading(false);
       }
     };
 
@@ -103,26 +154,64 @@ export default function Plan3DayPage() {
     }
   }, [planId, dayIndex]);
 
+
+
   const handleBackToPlan = () => {
     router.push(`/plan3/${planId}`);
   };
 
   const handleJumpToContext = (anchorId: string) => {
-    // This will be handled by the EnhancedReadingPane component
-    console.log('Jumping to context:', anchorId);
+    // If we have a direct chapter anchor, forward it
+    const scrollFn = scrollToAnchorRef.current;
+    if (!scrollFn) return;
+
+    // Map sequence event IDs to approximate chapter anchors
+    // Expected incoming format from activities: "event-<eventId>"
+    if (anchorId?.startsWith('event-') && dayDetails?.activities) {
+      const eventId = anchorId.slice('event-'.length);
+      const seq = dayDetails.activities.find((a: any) => a.type === 'sequence');
+      const events: Array<{ id: string; order?: number; sourceParagraph?: number }> = seq?.data?.events || [];
+      const found = events.find((e) => e.id === eventId);
+      
+      if (found) {
+        // Use sourceParagraph if available (new AI-generated data), otherwise fallback to order or intelligent mapping
+        let paragraphIndex;
+        if (found.sourceParagraph) {
+          paragraphIndex = found.sourceParagraph;
+        } else if (found.order) {
+          paragraphIndex = found.order;
+        } else {
+          // Map event position to story paragraphs more intelligently (fallback for old data)
+          const eventIndex = events.findIndex((e) => e.id === eventId);
+          const totalEvents = events.length;
+          
+          // Distribute events across the story more evenly
+          // First event -> early paragraph, last event -> later paragraph
+          if (totalEvents <= 3) {
+            paragraphIndex = eventIndex + 1;
+          } else if (totalEvents === 5) {
+            // For 5 events, distribute across the story more evenly
+            // Event 1 -> early, Event 5 -> late, others distributed in between
+            const distribution = [1, 3, 6, 9, 12]; // More realistic distribution
+            paragraphIndex = distribution[eventIndex] || eventIndex + 1;
+          } else {
+            // For other numbers of events, use a more intelligent distribution
+            const maxParagraphs = 15; // Assume stories have up to 15 paragraphs
+            const step = Math.max(1, Math.floor(maxParagraphs / totalEvents));
+            paragraphIndex = Math.min((eventIndex * step) + 1, maxParagraphs);
+          }
+        }
+        
+        const chapterId = `day-${dayIndex}`;
+        const targetAnchor = `chapter-${chapterId}-para-${paragraphIndex}`;
+        scrollFn(targetAnchor, { highlight: true, announce: true, scrollBehavior: 'smooth', block: 'center' });
+        return;
+      }
+    }
+
+    // Fallback: treat provided value as a direct anchor id
+    scrollFn(anchorId, { highlight: true, announce: true, scrollBehavior: 'smooth', block: 'center' });
   };
-
-  const handleActivityUpdate = (activityId: string, answer: any) => {
-    setActivityResponses(prev => ({
-      ...prev,
-      [activityId]: answer
-    }));
-    
-    // TODO: Implement auto-save to backend
-    console.log('Activity updated:', activityId, answer);
-  };
-
-
 
   const getChapterContent = () => {
     if (!plan?.story) return null;
@@ -145,19 +234,6 @@ export default function Plan3DayPage() {
       title: `${plan.story.title} - Day ${dayIndex}`,
       content: content
     };
-  };
-
-  const getProgressPercentage = () => {
-    if (!dayDetails?.activities) return 0;
-    
-    const completedCount = dayDetails.activities.filter(activity => 
-      activityResponses[activity.id] && 
-      (Array.isArray(activityResponses[activity.id]) ? 
-        activityResponses[activity.id].length > 0 : 
-        activityResponses[activity.id].trim().length > 0)
-    ).length;
-    
-    return (completedCount / dayDetails.activities.length) * 100;
   };
 
   if (loading) {
@@ -202,7 +278,7 @@ export default function Plan3DayPage() {
     );
   }
 
-  if (!plan || !dayDetails) {
+  if (!plan) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -214,63 +290,61 @@ export default function Plan3DayPage() {
   }
 
   const chapterContent = getChapterContent();
-  const progress = getProgressPercentage();
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Layout Bar */}
-      <LayoutBar
-        mode={layoutMode}
-        onChangeMode={setLayoutMode}
-        progress={progress}
-        dayIndex={dayIndex}
-        planName={plan.name}
-        isLoading={loading}
-      />
+    <>
+      {/* Activity Ready Notification */}
+      {showActivityReady && (
+        <div className="fixed top-20 right-4 z-50 bg-green-50 border border-green-200 rounded-lg p-3 shadow-lg transition-all duration-300">
+          <div className="flex items-center space-x-2">
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+            <span className="text-sm text-green-800">Activities ready!</span>
+          </div>
+        </div>
+      )}
 
-      {/* Main Content */}
-      <div className="h-[calc(100vh-80px)]">
-        {layoutMode === 'reading' && (
-          <EnhancedReadingPane
-            chapter={chapterContent}
-            fontSize={16}
-            onJumpToAnchor={handleJumpToContext}
-            layoutMode={layoutMode}
-            className="h-full"
-          />
-        )}
-
-        {layoutMode === 'activity' && (
-          <ActivityPane
-            activities={dayDetails.activities}
+      <GenericSplitLayout
+      readingContent={
+        <EnhancedReadingPane
+          chapter={chapterContent}
+          fontSize={16}
+          onScrollToAnchor={(fn) => {
+            scrollToAnchorRef.current = fn;
+          }}
+          layoutMode="reading"
+          className="h-full"
+        />
+      }
+      activityContent={
+        dayDetails ? (
+          <Plan3ActivityWrapper
+            planId={planId}
+            dayIndex={dayIndex}
+            studentId={plan.studentId.toString()}
+            dayDetails={dayDetails}
             onJumpToContext={handleJumpToContext}
-            onActivityUpdate={handleActivityUpdate}
             className="h-full"
           />
-        )}
-
-        {layoutMode === 'split' && (
-          <div className="flex h-full">
-            <div className="w-1/2 border-r border-gray-200">
-              <EnhancedReadingPane
-                chapter={chapterContent}
-                fontSize={16}
-                onJumpToAnchor={handleJumpToContext}
-                layoutMode={layoutMode}
-                className="h-full"
-              />
-            </div>
-            <div className="w-1/2">
-              <ActivityPane
-                activities={dayDetails.activities}
-                onJumpToContext={handleJumpToContext}
-                onActivityUpdate={handleActivityUpdate}
-                className="h-full"
-              />
+        ) : (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-4 text-gray-600">Loading activities...</p>
             </div>
           </div>
-        )}
-      </div>
-    </div>
-  );
-}
+        )
+      }
+      title={plan.name}
+      subtitle={`Day ${dayIndex}`}
+      onBack={handleBackToPlan}
+      activityLoading={activitiesLoading}
+      loadingMessage={`Generating activities for Day ${dayIndex}...`}
+      defaultView={defaultView}
+      printConfig={{
+        readingPrintable: false,
+        activitiesPrintable: false
+      }}
+     />
+     </>
+   );
+ }

@@ -91,7 +91,7 @@ const DailyActivityCard: React.FC<DailyActivityCardProps> = ({
     // Handle different content types
     if (typeof activity.content === 'string') {
       return (
-        <div className="prose prose-sm max-w-none">
+        <div className="prose prose-sm max-w-none no-hyphens">
           <p className="text-gray-700">{activity.content}</p>
         </div>
       );

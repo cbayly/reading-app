@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/Button';
 import { createPlan3, pollPlan3Status } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import Toast from '@/components/ui/Toast';
+import Plan3LoadingScreen from '@/components/plan3/Plan3LoadingScreen';
 
 interface CreatePlan3ButtonProps {
   studentId: number;
@@ -48,10 +49,13 @@ const CreatePlan3Button: React.FC<CreatePlan3ButtonProps> = ({
             type: 'success'
           });
 
-          // Navigate to the Plan3 page
-          setTimeout(() => {
-            router.push(`/plan3/${studentId}`);
-          }, 1000);
+          // Navigate to the Plan3 page using the real plan id returned
+          const planId = (completedPlan as any)?.id || (completedPlan as any)?.plan?.id;
+          if (planId) {
+            setTimeout(() => {
+              router.push(`/plan3/${planId}`);
+            }, 800);
+          }
           
         } catch (pollError: any) {
           console.error('Error polling for plan completion:', pollError);
@@ -106,6 +110,9 @@ const CreatePlan3Button: React.FC<CreatePlan3ButtonProps> = ({
           'Create 3-Day Plan'
         )}
       </Button>
+
+      {/* Full-screen skeleton while generating */}
+      <Plan3LoadingScreen studentName={studentName} isVisible={isCreating} />
 
       <Toast
         open={toast.open}

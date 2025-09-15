@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "nodemon src/index.js",
-    "start": "node src/index.js",
+    "start": "node start-production.js",
     "build": "prisma generate",
     "deploy": "prisma migrate deploy && prisma generate",
     "db:migrate": "prisma migrate dev",

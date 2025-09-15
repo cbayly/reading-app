@@ -3,23 +3,52 @@ import { useActivityProgress } from './useActivityProgress';
 
 // Mock fetch
 const mockFetch = jest.fn();
-global.fetch = mockFetch;
+(global as any).fetch = mockFetch as any;
 
-// Mock localStorage
+// In-memory localStorage mock
+const storage: Record<string, string> = {};
 const mockLocalStorage = {
-  getItem: jest.fn(),
-  setItem: jest.fn(),
-  removeItem: jest.fn(),
-  clear: jest.fn(),
+  getItem: jest.fn((key: string) => (Object.prototype.hasOwnProperty.call(storage, key) ? storage[key] : null)),
+  setItem: jest.fn((key: string, value: string) => { storage[key] = value; }),
+  removeItem: jest.fn((key: string) => { delete storage[key]; }),
+  clear: jest.fn(() => { Object.keys(storage).forEach(k => delete storage[k]); }),
 };
-Object.defineProperty(window, 'localStorage', {
-  value: mockLocalStorage,
-});
+Object.defineProperty(window, 'localStorage', { value: mockLocalStorage });
 
 // Mock navigator.onLine
-Object.defineProperty(navigator, 'onLine', {
-  value: true,
-  writable: true,
+Object.defineProperty(navigator, 'onLine', { value: true, writable: true });
+
+// Helpers for seeding storage
+const storageKeyFor = (props: { studentId: string; planId: string; dayIndex: number; activityType: string; }) => `activity_progress_${props.studentId}_${props.planId}_${props.dayIndex}_${props.activityType}`;
+const seedProgress = (progress: any, props = defaultProps) => {
+  window.localStorage.setItem(storageKeyFor(props), JSON.stringify(progress));
+};
+const seedSession = (sessionData: any) => {
+  window.localStorage.setItem('currentSessionId', sessionData.sessionId);
+  window.localStorage.setItem(sessionData.sessionId, JSON.stringify(sessionData));
+};
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockLocalStorage.clear();
+  // Default fetch behavior: URL-aware
+  mockFetch.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === 'string' ? input : input.toString();
+    // Health check
+    if (url.endsWith('/api/enhanced-activities/health')) {
+      return Promise.resolve({ ok: true, status: 200 });
+    }
+    // GET progress
+    if (/\/api\/enhanced-activities\/progress\/.+/.test(url) && (!init || !init.method || init.method === 'GET')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ progress: {} }) });
+    }
+    // POST progress save
+    if (url.endsWith('/api/enhanced-activities/progress') && init && init.method === 'POST') {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ success: true }) });
+    }
+    // Fallback
+    return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+  });
 });
 
 describe('useActivityProgress', () => {
@@ -29,31 +58,6 @@ describe('useActivityProgress', () => {
     dayIndex: 1,
     activityType: 'who',
   };
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockLocalStorage.getItem.mockReturnValue(null);
-    mockLocalStorage.setItem.mockImplementation(() => {});
-    mockLocalStorage.removeItem.mockImplementation(() => {});
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ progress: {} }),
-    });
-    
-    // Mock health check endpoint for connection quality testing
-    mockFetch.mockImplementation((url) => {
-      if (url === '/api/enhanced-activities/health') {
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-        });
-      }
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ progress: {} }),
-      });
-    });
-  });
 
   describe('initialization', () => {
     it('should initialize with loading state', () => {
@@ -98,8 +102,8 @@ describe('useActivityProgress', () => {
         }
         if (url.includes('/api/enhanced-activities/progress/')) {
           return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ progress: { who: serverProgress } }),
+        ok: true,
+        json: () => Promise.resolve({ progress: { who: serverProgress } }),
           });
         }
         return Promise.resolve({
@@ -128,27 +132,15 @@ describe('useActivityProgress', () => {
 
       mockFetch.mockImplementation((url) => {
         if (url === '/api/enhanced-activities/health') {
-          return Promise.resolve({
-            ok: true,
-            status: 200,
-          });
+          return Promise.resolve({ ok: true, status: 200 });
         }
         if (url.includes('/api/enhanced-activities/progress/')) {
-          return Promise.resolve({
-            ok: false,
-            status: 404,
-            statusText: 'Not Found',
-          });
+          return Promise.resolve({ ok: false, status: 404, statusText: 'Not Found' });
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ progress: {} }),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ progress: {} }) });
       });
 
-      mockLocalStorage.getItem
-        .mockReturnValueOnce(null) // First call for sync queue
-        .mockReturnValueOnce(JSON.stringify(localProgress)); // Second call for progress
+      seedProgress(localProgress);
 
       const { result } = renderHook(() => useActivityProgress(defaultProps));
 
@@ -176,7 +168,7 @@ describe('useActivityProgress', () => {
         });
       });
       
-      mockLocalStorage.getItem.mockImplementation(() => {
+      mockLocalStorage.getItem.mockImplementationOnce(() => {
         throw new Error('Storage error');
       });
 
@@ -297,38 +289,21 @@ describe('useActivityProgress', () => {
         completedAt: '2023-01-01T10:30:00Z',
         timeSpent: 1800,
         responses: [
-          {
-            id: 'resp1',
-            question: 'test',
-            answer: 'test',
-            createdAt: '2023-01-01T10:15:00Z',
-          },
+          { id: 'resp1', question: 'test', answer: 'test', createdAt: '2023-01-01T10:15:00Z' },
         ],
       };
 
       mockFetch.mockImplementation((url) => {
         if (url === '/api/enhanced-activities/health') {
-          return Promise.resolve({
-            ok: true,
-            status: 200,
-          });
+          return Promise.resolve({ ok: true, status: 200 });
         }
         if (url.includes('/api/enhanced-activities/progress/')) {
-          return Promise.resolve({
-            ok: false,
-            status: 404,
-            statusText: 'Not Found',
-          });
+          return Promise.resolve({ ok: false, status: 404, statusText: 'Not Found' });
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ progress: {} }),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ progress: {} }) });
       });
 
-      mockLocalStorage.getItem
-        .mockReturnValueOnce(null) // First call for sync queue
-        .mockReturnValueOnce(JSON.stringify(storedProgress)); // Second call for progress
+      seedProgress(storedProgress);
 
       const { result } = renderHook(() => useActivityProgress(defaultProps));
 
@@ -394,29 +369,20 @@ describe('useActivityProgress', () => {
         responses: [],
       };
 
-      mockFetch.mockImplementation((url) => {
+      mockFetch.mockImplementation((url, init) => {
         if (url === '/api/enhanced-activities/health') {
-          return Promise.resolve({
-            ok: true,
-            status: 200,
-          });
+          return Promise.resolve({ ok: true, status: 200 });
         }
-        if (url.includes('/api/enhanced-activities/progress/')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ progress: { who: localProgress } }),
-          });
+        if (url.includes('/api/enhanced-activities/progress/') && (!init || init.method === 'GET')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ progress: { who: localProgress } }) });
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ progress: {} }),
-        });
+        if (url === '/api/enhanced-activities/progress' && init && init.method === 'POST') {
+          return Promise.resolve({ ok: true, status: 200 });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       });
 
-      // Mock localStorage to return local progress
-      mockLocalStorage.getItem
-        .mockReturnValueOnce(null) // First call for sync queue
-        .mockReturnValueOnce(JSON.stringify(localProgress)); // Second call for progress
+      seedProgress(localProgress);
 
       const { result } = renderHook(() => useActivityProgress(defaultProps));
 
@@ -424,14 +390,12 @@ describe('useActivityProgress', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      // Simulate coming back online
       await act(async () => {
         await result.current.updateProgress('in_progress');
       });
 
-      // Should process sync queue when connection is good
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringMatching(/\/api\/enhanced-activities\/progress/),
+        expect.stringContaining('/api/enhanced-activities/progress'),
         expect.any(Object)
       );
     });
@@ -466,8 +430,8 @@ describe('useActivityProgress', () => {
         }
         if (url.includes('/api/enhanced-activities/progress/')) {
           return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ progress: { who: serverProgress } }),
+        ok: true,
+        json: () => Promise.resolve({ progress: { who: serverProgress } }),
           });
         }
         return Promise.resolve({
@@ -520,8 +484,8 @@ describe('useActivityProgress', () => {
         }
         if (url.includes('/api/enhanced-activities/progress/')) {
           return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ progress: { who: serverProgress } }),
+        ok: true,
+        json: () => Promise.resolve({ progress: { who: serverProgress } }),
           });
         }
         return Promise.resolve({
@@ -721,15 +685,15 @@ describe('useActivityProgress', () => {
       mockFetch.mockImplementation((url) => {
         if (url === '/api/enhanced-activities/health') {
           return Promise.resolve({
-            ok: true,
+        ok: true,
             status: 200,
           });
         }
         if (url.includes('/api/enhanced-activities/progress/')) {
           return Promise.resolve({
-            ok: false,
-            status: 500,
-            statusText: 'Internal Server Error',
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error',
           });
         }
         return Promise.resolve({
@@ -756,7 +720,7 @@ describe('useActivityProgress', () => {
     });
 
     it('should handle localStorage failures gracefully', async () => {
-      mockLocalStorage.setItem.mockImplementation(() => {
+      mockLocalStorage.setItem.mockImplementationOnce(() => {
         throw new Error('Storage full');
       });
 
@@ -1147,9 +1111,9 @@ describe('useActivityProgress', () => {
     });
 
     it('should test connection quality on initialization', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        status: 200,
+      mockFetch.mockImplementation((url) => {
+        if (url === '/api/enhanced-activities/health') return Promise.resolve({ ok: true, status: 200 });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ progress: {} }) });
       });
 
       const { result } = renderHook(() => useActivityProgress(defaultProps));
@@ -1158,11 +1122,7 @@ describe('useActivityProgress', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      // Should test connection quality immediately
-      expect(mockFetch).toHaveBeenCalledWith('/api/enhanced-activities/health', {
-        method: 'HEAD',
-        cache: 'no-cache'
-      });
+      expect(mockFetch).toHaveBeenCalledWith('/api/enhanced-activities/health', { method: 'HEAD', cache: 'no-cache' });
     });
 
     it('should update connection quality based on response time', async () => {
@@ -1436,17 +1396,19 @@ describe('useActivityProgress', () => {
     });
 
     it('should handle force sync errors', async () => {
-      mockFetch.mockRejectedValue(new Error('Sync failed'));
+      mockFetch.mockImplementation((url, init) => {
+        if (url === '/api/enhanced-activities/health') return Promise.resolve({ ok: true, status: 200 });
+        if (url === '/api/enhanced-activities/progress' && init && init.method === 'POST') {
+          return Promise.reject(new Error('Sync failed'));
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ progress: {} }) });
+      });
 
       const { result } = renderHook(() => useActivityProgress(defaultProps));
 
-      await waitFor(() => {
-        expect(result.current.isLoading).toBe(false);
-      });
+      await waitFor(() => { expect(result.current.isLoading).toBe(false); });
 
-      await act(async () => {
-        await result.current.forceSync();
-      });
+      await act(async () => { await result.current.forceSync(); });
 
       expect(result.current.error).toBe('Sync failed');
     });

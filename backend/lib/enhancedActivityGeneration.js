@@ -446,13 +446,13 @@ function validateContent(content, studentAge) {
       }
     }
   } else if (studentAge <= 12) {
-    // Rules for pre-teens
-    const preteenInappropriate = ['death', 'kill', 'blood'];
+    // Rules for pre-teens - more permissive than younger children
+    const preteenInappropriate = ['explicit violence', 'graphic content'];
     for (const word of preteenInappropriate) {
       if (contentStr.includes(word)) {
         return { 
           isValid: false, 
-          reason: `Content contains age-inappropriate word for ${studentAge}-year-old: ${word}`,
+          reason: `Content contains age-inappropriate content for ${studentAge}-year-old: ${word}`,
           severity: 'medium'
         };
       }
@@ -477,6 +477,85 @@ function validateContent(content, studentAge) {
       reason: 'Content appears to be repetitive or nonsensical',
       severity: 'medium'
     };
+  }
+
+  // Special validation for vocabulary content
+  if (content.vocabularyWords || content.realWords) {
+    const vocabularyValidation = validateVocabularyContent(content);
+    if (!vocabularyValidation.isValid) {
+      return vocabularyValidation;
+    }
+  }
+
+  return { isValid: true };
+}
+
+/**
+ * Validates vocabulary content specifically for quality issues
+ * @param {object} content - The vocabulary content to validate
+ * @returns {object} - Validation result with isValid boolean and reason string
+ */
+function validateVocabularyContent(content) {
+  // Determine the structure (enhanced activities vs. other formats)
+  const words = content.vocabularyWords || content.realWords || [];
+  const decoys = content.decoyWords || content.decoyDefinitions || [];
+  
+  if (!words || words.length === 0) {
+    return {
+      isValid: false,
+      reason: 'No vocabulary words found in content'
+    };
+  }
+
+  // Check for duplicate words
+  const wordSet = new Set();
+  for (const wordObj of words) {
+    const word = wordObj.word || wordObj.definition;
+    if (wordSet.has(word.toLowerCase())) {
+      return {
+        isValid: false,
+        reason: `Duplicate vocabulary word found: "${word}"`
+      };
+    }
+    wordSet.add(word.toLowerCase());
+  }
+
+  // Check for circular definitions
+  for (const wordObj of words) {
+    const word = wordObj.word || '';
+    const definition = wordObj.definition || '';
+    
+    if (word && definition) {
+      const validation = validateVocabularyDefinition(word, definition);
+      if (!validation.isValid) {
+        return {
+          isValid: false,
+          reason: `Vocabulary definition quality issue: ${validation.reason}`
+        };
+      }
+    }
+  }
+
+  // Check for missing periods in definitions
+  for (const wordObj of words) {
+    const definition = wordObj.definition || '';
+    if (definition && !definition.trim().endsWith('.')) {
+      return {
+        isValid: false,
+        reason: `Definition missing period: "${definition}"`
+      };
+    }
+  }
+
+  // Check decoy definitions for quality
+  for (const decoy of decoys) {
+    const definition = decoy.definition || '';
+    if (definition && !definition.trim().endsWith('.')) {
+      return {
+        isValid: false,
+        reason: `Decoy definition missing period: "${definition}"`
+      };
+    }
   }
 
   return { isValid: true };
@@ -505,8 +584,12 @@ REQUIREMENTS:
 - Extract 3-5 main characters that appear in this specific chapter
 - For each character, identify their role (protagonist, antagonist, supporting character, etc.)
 - Generate 2-3 plausible decoy characters that could fit the story's setting/theme but don't appear
-- Ensure all content is age-appropriate for a ${studentAge}-year-old student
+- Ensure all content is age-appropriate for the student's reading level
 - Include brief descriptions for each character (real and decoy)
+- Choose varied, setting-appropriate names that reflect the story's cultural/time context when possible
+- Prefer natural, diverse given names (and surnames if relevant) over generic placeholders
+- Vary syllable counts and initials across names; avoid repeating similar-sounding names within this list
+- Do not mention any character ages in descriptions
 
 OUTPUT FORMAT (valid JSON only):
 {
@@ -591,8 +674,9 @@ REQUIREMENTS:
 - Extract 3-5 main settings/locations that appear in this specific chapter
 - For each setting, provide a descriptive text that helps students understand the location
 - Generate 2-3 plausible decoy settings that could fit the story's world but don't appear
-- Ensure all content is age-appropriate for a ${studentAge}-year-old student
+- Ensure all content is age-appropriate for the student's reading level
 - Include sensory details and atmosphere in descriptions when appropriate
+- Use setting-appropriate character and place names where referenced (avoid generic placeholders)
 
 OUTPUT FORMAT (valid JSON only):
 {
@@ -672,22 +756,28 @@ STORY CONTENT:
 ${chapterContent}
 
 REQUIREMENTS:
-- Extract 4-6 key events that occur in chronological order in this chapter
+- Extract 4-6 key events that occur throughout the ENTIRE chapter, not just the beginning
+- Select events from different parts of the story: beginning, middle, and end
 - Each event should be clearly distinct and represent a significant moment in the story
-- Events should be written in simple, clear language appropriate for a ${studentAge}-year-old student
+- Events should be written in simple, clear language appropriate for the student's reading level
 - Each event should be 1-2 sentences long and capture the essential action
 - Ensure all content is age-appropriate and educational
+- When mentioning characters or places in events, use the varied, setting-appropriate names established for this chapter
+- IMPORTANT: Make sure to include events from the middle and end of the story, not just the opening paragraphs
+- For each event, identify which paragraph (1-based index) it primarily occurs in
 
 OUTPUT FORMAT (valid JSON only):
 {
   "orderedEvents": [
     {
       "id": 1,
-      "text": "First event that happens in the story"
+      "text": "First event that happens in the story",
+      "sourceParagraph": 1
     },
     {
       "id": 2,
-      "text": "Second event that happens in the story"
+      "text": "Second event that happens in the story",
+      "sourceParagraph": 3
     }
   ]
 }
@@ -696,6 +786,9 @@ IMPORTANT:
 - Return only valid JSON. Do not include any text outside the JSON structure.
 - Events must be in the correct chronological order as they appear in the story.
 - Each event should be self-contained and understandable on its own.
+- Ensure you select events from throughout the entire passage, including the middle and end sections.
+- The sourceParagraph field should indicate which paragraph (1-based index) the event primarily occurs in.
+- If an event spans multiple paragraphs, use the paragraph where the event begins or is most prominent.
 `;
 
   try {
@@ -729,11 +822,14 @@ IMPORTANT:
     // Validate that each event has required fields
     for (let i = 0; i < parsedContent.orderedEvents.length; i++) {
       const event = parsedContent.orderedEvents[i];
-      if (!event.id || !event.text) {
-        throw new Error(`Event at index ${i} missing required fields`);
+      if (!event.id || !event.text || typeof event.sourceParagraph !== 'number') {
+        throw new Error(`Event at index ${i} missing required fields (id, text, or sourceParagraph)`);
       }
       if (event.id !== i + 1) {
         throw new Error(`Event IDs must be sequential starting from 1`);
+      }
+      if (event.sourceParagraph < 1) {
+        throw new Error(`Event at index ${i} has invalid sourceParagraph (must be >= 1)`);
       }
     }
 
@@ -770,38 +866,35 @@ STORY CONTENT:
 ${chapterContent}
 
 REQUIREMENTS:
-- Create exactly 4 multiple choice options (A, B, C, D)
+- Create exactly 4 multiple choice options
 - One option should be the correct main idea of the story
 - The other 3 options should be plausible but incorrect
 - Each option should be 1-2 sentences long and clearly stated
 - Provide explanatory feedback for each option explaining why it's correct or incorrect
-- Ensure all content is age-appropriate for a ${studentAge}-year-old student
+- Ensure all content is age-appropriate for the student's reading level
 - Use language appropriate for the student's reading level
+- If referencing characters or places in options/feedback, use the chapter's varied, setting-appropriate names
 
 OUTPUT FORMAT (valid JSON only):
 {
   "question": "What is the main idea of this story?",
   "options": [
     {
-      "id": "A",
       "text": "First option text",
       "isCorrect": true,
       "feedback": "This is correct because it captures the central theme and purpose of the story."
     },
     {
-      "id": "B", 
       "text": "Second option text",
       "isCorrect": false,
       "feedback": "This is incorrect because it focuses on a minor detail rather than the main idea."
     },
     {
-      "id": "C",
       "text": "Third option text", 
       "isCorrect": false,
       "feedback": "This is incorrect because it misinterprets the story's central message."
     },
     {
-      "id": "D",
       "text": "Fourth option text",
       "isCorrect": false,
       "feedback": "This is incorrect because it describes a setting detail rather than the main idea."
@@ -848,7 +941,7 @@ IMPORTANT:
     let correctCount = 0;
     for (let i = 0; i < parsedContent.options.length; i++) {
       const option = parsedContent.options[i];
-      if (!option.id || !option.text || typeof option.isCorrect !== 'boolean' || !option.feedback) {
+      if (!option.text || typeof option.isCorrect !== 'boolean' || !option.feedback) {
         throw new Error(`Option at index ${i} missing required fields`);
       }
       if (option.isCorrect) {
@@ -866,6 +959,52 @@ IMPORTANT:
     console.error('Main idea extraction failed:', error);
     throw error;
   }
+}
+
+/**
+ * Validates vocabulary definition quality to ensure educational value.
+ * @param {string} word - The vocabulary word being defined.
+ * @param {string} definition - The definition to validate.
+ * @returns {object} - Validation result with isValid boolean and reason string.
+ */
+function validateVocabularyDefinition(word, definition) {
+  const wordLower = word.toLowerCase();
+  const definitionLower = definition.toLowerCase();
+  
+  // Check for circular definitions
+  if (definitionLower.includes(wordLower)) {
+    return {
+      isValid: false,
+      reason: `Circular definition: "${word}" appears in its own definition`
+    };
+  }
+  
+  // Check for overly simple definitions
+  if (definitionLower.length < 20) {
+    return {
+      isValid: false,
+      reason: `Definition too short: "${definition}" (minimum 20 characters)`
+    };
+  }
+  
+  // Check for proper sentence structure (ends with period)
+  if (!definition.trim().endsWith('.')) {
+    return {
+      isValid: false,
+      reason: `Definition must end with a period: "${definition}"`
+    };
+  }
+  
+  // Check for generic definitions
+  const genericPhrases = ['a type of', 'something that', 'a thing that', 'a kind of'];
+  if (genericPhrases.some(phrase => definitionLower.startsWith(phrase))) {
+    return {
+      isValid: false,
+      reason: `Definition too generic: "${definition}"`
+    };
+  }
+  
+  return { isValid: true, reason: 'Definition passes quality checks' };
 }
 
 /**
@@ -888,29 +1027,43 @@ STORY CONTENT:
 ${chapterContent}
 
 REQUIREMENTS:
-- Extract 4-6 vocabulary words that appear in this chapter and are appropriate for a ${studentAge}-year-old student
-- Choose words that are challenging but not too difficult for the student's age level
+- Extract 4-6 vocabulary words that appear in this chapter and are appropriate for the student's reading level
+- Choose words that are challenging but not too difficult for the student's reading level
 - Provide age-appropriate definitions that are clear and educational
 - Generate 2-3 decoy definitions that are plausible but incorrect for the vocabulary words
 - Ensure all content is age-appropriate and educational
 - Use simple, clear language in definitions
+- When using example sentences, reference the chapter's varied, setting-appropriate names and places if needed
+- All definitions must be complete sentences ending with periods
+- NEVER use the target word in its own definition
+- Avoid circular or overly simple definitions
+
+VOCABULARY DEFINITION EXAMPLES:
+GOOD: "Showing courage and not being afraid to face difficult situations."
+BAD: "Being brave." (circular definition)
+
+GOOD: "Having a lot of light or being very colorful and cheerful."
+BAD: "Something that is bright." (circular definition)
+
+GOOD: "Food that tastes very good and is enjoyable to eat."
+BAD: "A type of food that people eat." (too generic)
 
 OUTPUT FORMAT (valid JSON only):
 {
   "vocabularyWords": [
     {
       "word": "brave",
-      "definition": "Showing courage and not being afraid to face difficult situations",
+      "definition": "Showing courage and not being afraid to face difficult situations.",
       "context": "The brave friend helped others when they needed it."
     }
   ],
   "decoyDefinitions": [
     {
-      "definition": "A type of food that people eat",
+      "definition": "A type of food that people eat.",
       "isUsed": false
     },
     {
-      "definition": "A color that is bright and cheerful",
+      "definition": "A color that is bright and cheerful.",
       "isUsed": false
     }
   ]
@@ -922,6 +1075,8 @@ IMPORTANT:
 - Definitions should be age-appropriate and educational.
 - Decoy definitions should be plausible but clearly incorrect.
 - Include context sentences to help students understand word usage.
+- All definitions must be complete sentences ending with periods.
+- Ensure no duplicate vocabulary words.
 `;
 
   try {
@@ -952,8 +1107,14 @@ IMPORTANT:
       throw new Error('Invalid number of vocabulary words extracted');
     }
 
-    if (parsedContent.decoyDefinitions.length < 1 || parsedContent.decoyDefinitions.length > 4) {
-      throw new Error('Invalid number of decoy definitions generated');
+    if (parsedContent.decoyDefinitions.length < 1) {
+      throw new Error('At least one decoy definition is required');
+    }
+    
+    // Allow flexible number of decoy definitions (1-6 is reasonable)
+    if (parsedContent.decoyDefinitions.length > 6) {
+      console.warn(`Generated ${parsedContent.decoyDefinitions.length} decoy definitions, limiting to 6`);
+      parsedContent.decoyDefinitions = parsedContent.decoyDefinitions.slice(0, 6);
     }
 
     // Validate that each vocabulary word has required fields
@@ -962,6 +1123,19 @@ IMPORTANT:
       if (!vocab.word || !vocab.definition || !vocab.context) {
         throw new Error(`Vocabulary word at index ${i} missing required fields`);
       }
+      
+      // Validate definition quality using the utility function
+      const validation = validateVocabularyDefinition(vocab.word, vocab.definition);
+      if (!validation.isValid) {
+        throw new Error(`Definition quality issue for "${vocab.word}": ${validation.reason}`);
+      }
+    }
+    
+    // Check for duplicate vocabulary words
+    const words = parsedContent.vocabularyWords.map(v => v.word.toLowerCase());
+    const uniqueWords = new Set(words);
+    if (uniqueWords.size !== words.length) {
+      throw new Error('Duplicate vocabulary words found. Each word should appear only once.');
     }
 
     // Validate that each decoy definition has required fields
@@ -972,7 +1146,21 @@ IMPORTANT:
       }
     }
 
-    return parsedContent;
+    // Transform the data structure to match what the frontend expects
+    const transformedContent = {
+      realWords: parsedContent.vocabularyWords.map(vocab => ({
+        word: vocab.word,
+        definition: vocab.definition,
+        context: vocab.context
+      })),
+      decoyWords: parsedContent.decoyDefinitions.map(decoy => ({
+        word: '', // Decoy words don't have actual words, just definitions
+        definition: decoy.definition,
+        context: '' // Decoy words don't have context
+      }))
+    };
+
+    return transformedContent;
   } catch (error) {
     console.error('Vocabulary extraction failed:', error);
     throw error;
@@ -1003,9 +1191,10 @@ REQUIREMENTS:
 - Each prediction should be based on story clues and character development
 - Provide a plausibility score (1-10) for each prediction based on story evidence
 - Include explanatory feedback for each prediction explaining the reasoning
-- Ensure all content is age-appropriate for a ${studentAge}-year-old student
+- Ensure all content is age-appropriate for the student's reading level
 - Use language appropriate for the student's reading level
 - Predictions should be creative but grounded in the story's context
+- Refer to characters and settings using the chapter's varied, setting-appropriate names
 
 OUTPUT FORMAT (valid JSON only):
 {
@@ -1087,7 +1276,17 @@ IMPORTANT:
       }
     }
 
-    return parsedContent;
+    // Transform the data structure to match what the frontend expects
+    const transformedContent = {
+      question: parsedContent.question,
+      options: parsedContent.predictions.map(prediction => ({
+        text: prediction.text,
+        plausibilityScore: prediction.plausibilityScore,
+        feedback: prediction.feedback
+      }))
+    };
+
+    return transformedContent;
   } catch (error) {
     console.error('Prediction extraction failed:', error);
     throw error;
@@ -1150,16 +1349,16 @@ function generateFallbackContent(activityType, studentAge) {
     case 'sequence':
       return {
         orderedEvents: [
-          { id: 1, text: 'The friends meet at the park to play.' },
-          { id: 2, text: 'They discover something interesting in the park.' },
-          { id: 3, text: 'They work together to solve a problem.' },
-          { id: 4, text: 'They learn an important lesson about friendship.' }
+          { id: 1, text: 'The friends meet at the park to play.', sourceParagraph: 1 },
+          { id: 2, text: 'They discover something interesting in the park.', sourceParagraph: 2 },
+          { id: 3, text: 'They work together to solve a problem.', sourceParagraph: 3 },
+          { id: 4, text: 'They learn an important lesson about friendship.', sourceParagraph: 4 }
         ],
         shuffledEvents: [
-          { id: 3, text: 'They work together to solve a problem.' },
-          { id: 1, text: 'The friends meet at the park to play.' },
-          { id: 4, text: 'They learn an important lesson about friendship.' },
-          { id: 2, text: 'They discover something interesting in the park.' }
+          { id: 3, text: 'They work together to solve a problem.', sourceParagraph: 3 },
+          { id: 1, text: 'The friends meet at the park to play.', sourceParagraph: 1 },
+          { id: 4, text: 'They learn an important lesson about friendship.', sourceParagraph: 4 },
+          { id: 2, text: 'They discover something interesting in the park.', sourceParagraph: 2 }
         ]
       };
     
@@ -1196,31 +1395,33 @@ function generateFallbackContent(activityType, studentAge) {
     
     case 'vocabulary':
       return {
-        vocabularyWords: [
+        realWords: [
           {
             word: 'brave',
-            definition: 'Showing courage and not being afraid to face difficult situations',
+            definition: 'Showing courage and not being afraid to face difficult situations.',
             context: 'The brave friend helped others when they needed it.'
           },
           {
             word: 'helpful',
-            definition: 'Willing to assist others and be useful',
+            definition: 'Willing to assist others and be useful.',
             context: 'The helpful student shared their supplies with classmates.'
           },
           {
             word: 'friendly',
-            definition: 'Kind and pleasant to be around',
+            definition: 'Kind and pleasant to be around.',
             context: 'The friendly neighbor always says hello with a smile.'
           }
         ],
-        decoyDefinitions: [
+        decoyWords: [
           {
-            definition: 'A type of food that people eat',
-            isUsed: false
+            word: 'delicious',
+            definition: 'Food that tastes very good and is enjoyable to eat.',
+            context: 'The delicious meal was enjoyed by everyone.'
           },
           {
-            definition: 'A color that is bright and cheerful',
-            isUsed: false
+            word: 'bright',
+            definition: 'Having a lot of light or being very colorful and cheerful.',
+            context: 'The bright colors made the room feel happy.'
           }
         ]
       };
@@ -1228,27 +1429,23 @@ function generateFallbackContent(activityType, studentAge) {
     case 'predict':
       return {
         question: 'What do you think will happen next in the story?',
-        predictions: [
+        options: [
           {
-            id: 'A',
             text: 'The friends will work together to solve the problem.',
             plausibilityScore: 9,
             feedback: 'This is very likely because the story shows the friends helping each other.'
           },
           {
-            id: 'B',
             text: 'They will ask an adult for help.',
             plausibilityScore: 7,
             feedback: 'This is quite likely because asking for help is a good problem-solving strategy.'
           },
           {
-            id: 'C',
             text: 'They will find a creative solution.',
             plausibilityScore: 8,
             feedback: 'This is very likely because the story shows the friends being resourceful.'
           },
           {
-            id: 'D',
             text: 'They will learn something new.',
             plausibilityScore: 6,
             feedback: 'This is somewhat likely because stories often teach lessons.'

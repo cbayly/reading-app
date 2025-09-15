@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import api from '@/lib/api';
 import { ActivityProgress, ActivityResponse, ActivityState } from '../types/enhancedActivities';
 
 interface UseActivityProgressOptions {
@@ -183,79 +184,66 @@ export const useActivityProgress = ({
 
   // API call to fetch progress from server
   const fetchProgress = useCallback(async (): Promise<ActivityProgress | null> => {
-    try {
-      const response = await fetch(`/api/enhanced-activities/progress/${studentId}/${planId}/${dayIndex}`);
-      if (!response.ok) {
-        if (response.status === 404) {
-          return null; // No progress found
-        }
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      const data = await response.json();
-      const serverProgress = data.progress?.[activityType];
-      
-      if (serverProgress) {
-        // Convert server progress to ActivityProgress format
+    const shapeToProgress = (p: any): ActivityProgress | null => {
+      if (!p) return null;
+      const responses = Array.isArray(p.responses)
+        ? p.responses.map((r: any) => ({
+            id: r.id?.toString?.() || `${studentId}_${planId}_${dayIndex}_${activityType}_${Date.now()}`,
+            question: r.question || '',
+            answer: r.answer,
+            isCorrect: r.isCorrect ?? undefined,
+            feedback: r.feedback ?? undefined,
+            score: r.score ?? undefined,
+            timeSpent: r.timeSpent ?? undefined,
+            createdAt: r.createdAt ? new Date(r.createdAt) : new Date()
+          }))
+        : [];
         return {
           id: `${studentId}_${planId}_${dayIndex}_${activityType}`,
           activityType: activityType as ActivityProgress['activityType'],
-          status: serverProgress.status,
-          startedAt: serverProgress.startedAt ? new Date(serverProgress.startedAt) : undefined,
-          completedAt: serverProgress.completedAt ? new Date(serverProgress.completedAt) : undefined,
-          timeSpent: serverProgress.timeSpent,
-          attempts: serverProgress.attempts,
-          responses: serverProgress.responses?.map((r: any) => ({
-            ...r,
-            createdAt: new Date(r.createdAt)
-          })) || []
-        };
-      }
-      
+        status: (p.status as ActivityProgress['status']) || 'not_started',
+        startedAt: p.startedAt ? new Date(p.startedAt) : undefined,
+        completedAt: p.completedAt ? new Date(p.completedAt) : undefined,
+        timeSpent: p.timeSpent ?? 0,
+        attempts: p.attempts ?? 0,
+        responses
+      };
+    };
+    try {
+      // Temporary: use legacy route only to avoid 404s while by-plan alias is unavailable
+      const res = await api.get(`/enhanced-activities/${planId}/${dayIndex}`);
+      const full = res.data;
+      const map = full?.progress || {};
+      return shapeToProgress(map[activityType]);
+    } catch {
       return null;
-    } catch (err) {
-      console.warn('Failed to fetch progress from server:', err);
-      throw err; // Re-throw the error so initialization can handle it
     }
   }, [studentId, planId, dayIndex, activityType]);
 
   // API call to save progress to server
   const saveProgressToServer = useCallback(async (progressData: ActivityProgress): Promise<boolean> => {
     try {
-      // Convert ActivityProgress to the format expected by the API
-      const apiPayload = {
+      const answers = progressData.responses?.map((r) => ({
+        question: r.question,
+        answer: r.answer,
+        isCorrect: r.isCorrect,
+        feedback: r.feedback,
+        score: r.score,
+        timeSpent: r.timeSpent
+      })) || [];
+      await api.post('/enhanced-activities/progress', {
         planId,
         dayIndex,
         activityType,
         status: progressData.status,
         timeSpent: progressData.timeSpent,
-        answers: progressData.responses.map(response => ({
-          question: response.question,
-          answer: response.answer,
-          isCorrect: response.isCorrect,
-          feedback: response.feedback,
-          score: response.score,
-          timeSpent: response.timeSpent
-        }))
-      };
-
-      const response = await fetch('/api/enhanced-activities/progress', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(apiPayload),
+        answers
       });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      
       return true;
-    } catch (err) {
-      console.warn('Failed to save progress to server:', err);
+    } catch {
       return false;
     }
-  }, [studentId, planId, dayIndex, activityType]);
+  }, [planId, dayIndex, activityType]);
 
   // Add item to sync queue
   const addToSyncQueue = useCallback((action: SyncQueueItem['action'], data: any) => {
@@ -273,29 +261,9 @@ export const useActivityProgress = ({
 
   // Test connection quality
   const testConnectionQuality = useCallback(async (): Promise<'excellent' | 'good' | 'poor' | 'offline'> => {
-    if (!navigator.onLine) {
-      return 'offline';
-    }
-
-    try {
-      const startTime = Date.now();
-      const response = await fetch('/api/enhanced-activities/health', {
-        method: 'HEAD',
-        cache: 'no-cache'
-      });
-      const endTime = Date.now();
-      const latency = endTime - startTime;
-
-      if (!response.ok) {
-        return 'poor';
-      }
-
-      if (latency < 200) return 'excellent';
-      if (latency < 1000) return 'good';
-      return 'poor';
-    } catch (err) {
-      return 'offline';
-    }
+    // Disabled for now since we're using Plan3 system
+    // The enhanced activities health endpoint is not needed
+    return 'good'; // Assume good connection
   }, []);
 
   // Monitor connection quality
@@ -415,7 +383,7 @@ export const useActivityProgress = ({
         
         if (!isOffline) {
           try {
-            serverProgress = await fetchProgress();
+          serverProgress = await fetchProgress();
           } catch (err) {
             serverError = err;
             console.warn('Failed to fetch progress from server:', err);
@@ -563,12 +531,13 @@ export const useActivityProgress = ({
 
   // Validate activity state transitions
   const validateStateTransition = useCallback((fromStatus: string, toStatus: string): boolean => {
+    // Allow no-op transitions
+    if (fromStatus === toStatus) return true;
     const validTransitions: Record<string, string[]> = {
       'not_started': ['in_progress'],
       'in_progress': ['completed', 'not_started'], // Allow reset
       'completed': ['not_started'] // Allow reset
     };
-    
     return validTransitions[fromStatus]?.includes(toStatus) || false;
   }, []);
 
@@ -577,8 +546,17 @@ export const useActivityProgress = ({
     if (!progress) return;
     
     // Validate state transition
+    // Ignore attempts to move from completed back to in_progress silently
+    if (progress.status === 'completed' && status === 'in_progress') {
+      return;
+    }
     if (!validateStateTransition(progress.status, status)) {
       console.warn(`Invalid state transition from ${progress.status} to ${status}`);
+      return;
+    }
+    
+    // If status is unchanged and no time update, no-op
+    if (progress.status === status && (timeSpent === undefined || timeSpent === progress.timeSpent)) {
       return;
     }
     

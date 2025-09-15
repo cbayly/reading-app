@@ -102,14 +102,19 @@ const EnhancedReadingPane: React.FC<EnhancedReadingPaneProps> = ({
       setTimeout(() => {
         element.focus();
         
-        // Announce to screen readers if requested
+        // Announce to screen readers if requested using a transient offscreen live region
         if (announce) {
           const paragraphNumber = anchorId.split('-').pop();
           const announcement = `Jumped to paragraph ${paragraphNumber}`;
-          const liveRegion = document.querySelector('[aria-live="polite"]');
-          if (liveRegion) {
-            liveRegion.textContent = announcement;
-          }
+          const sr = document.createElement('div');
+          sr.setAttribute('aria-live', 'polite');
+          sr.setAttribute('aria-atomic', 'true');
+          sr.className = 'sr-only';
+          sr.textContent = announcement;
+          document.body.appendChild(sr);
+          setTimeout(() => {
+            if (sr.parentNode) sr.parentNode.removeChild(sr);
+          }, 1000);
         }
       }, scrollBehavior === 'smooth' ? 500 : 100);
     }
@@ -323,7 +328,7 @@ const EnhancedReadingPane: React.FC<EnhancedReadingPaneProps> = ({
     switch (event.key) {
       case 'Home':
         event.preventDefault();
-        scrollToAnchor('chapter-1-para-1', { scrollBehavior: 'smooth' });
+        contentRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
         break;
       case 'End':
         event.preventDefault();
@@ -344,7 +349,7 @@ const EnhancedReadingPane: React.FC<EnhancedReadingPaneProps> = ({
         }
         break;
     }
-  }, [isVisible, scrollToAnchor, showTableOfContents]);
+  }, [isVisible, showTableOfContents]);
 
   // Add keyboard event listener
   useEffect(() => {
@@ -596,17 +601,6 @@ const EnhancedReadingPane: React.FC<EnhancedReadingPaneProps> = ({
               )}
             </div>
             <div className="flex items-center space-x-3" role="group" aria-label="Chapter navigation controls">
-              <button
-                onClick={() => scrollToAnchor('chapter-1-para-1', { scrollBehavior: 'smooth' })}
-                className="flex items-center px-3 py-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-all duration-200 focus-ring font-medium"
-                aria-label="Go to first paragraph"
-                title="Go to first paragraph"
-              >
-                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"></path>
-                </svg>
-                First
-              </button>
               <button
                 onClick={() => {
                   const container = document.querySelector('.reading-content');

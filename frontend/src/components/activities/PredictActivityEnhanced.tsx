@@ -18,7 +18,9 @@ const PredictActivityEnhanced: React.FC<PredictActivityEnhancedProps> = ({
   onProgressUpdate,
   onJumpToContext,
   className = '',
-  disabled = false
+  disabled = false,
+  planId,
+  dayIndex
 }) => {
   const deviceInfo = useDeviceDetector();
   const interactionPattern = getOptimalInteractionPattern(deviceInfo);
@@ -26,6 +28,8 @@ const PredictActivityEnhanced: React.FC<PredictActivityEnhancedProps> = ({
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<ActivityFeedback | null>(null);
   const [showFeedback, setShowFeedback] = useState(false);
+  const [showCongratulations, setShowCongratulations] = useState(false);
+  const [checks, setChecks] = useState(0);
   const [startTime] = useState(Date.now());
 
   // Initialize from progress if available
@@ -69,23 +73,10 @@ const PredictActivityEnhanced: React.FC<PredictActivityEnhancedProps> = ({
   const handleSelect = useCallback((index: number) => {
     if (disabled) return;
     setSelectedIndex(index);
-
-    const option = content.content.options[index];
-    const isStrong = option.plausibilityScore >= 7;
-    const immediateFeedback: ActivityFeedback = {
-      isCorrect: isStrong,
-      score: Math.round((option.plausibilityScore / 10) * 100),
-      feedback: option.feedback,
-      suggestions: isStrong ? undefined : [
-        'Look for details that better support a different prediction.',
-        'Choose the option that best fits the character goals and events.'
-      ],
-      nextSteps: isStrong ? ['Consider what evidence supports this prediction.'] : ['Try selecting a more plausible option.']
-    };
-    setFeedback(immediateFeedback);
-    setShowFeedback(true);
-    setTimeout(() => setShowFeedback(false), 3000);
-  }, [disabled, content.content.options]);
+    
+    // Clear any existing feedback when selecting a new option
+    setShowFeedback(false);
+  }, [disabled]);
 
   const handleComplete = useCallback(() => {
     if (disabled || selectedIndex === null) return;
@@ -126,12 +117,26 @@ const PredictActivityEnhanced: React.FC<PredictActivityEnhancedProps> = ({
         feedback: finalFeedback.feedback,
         score,
         timeSpent,
-        createdAt: new Date()
+        createdAt: new Date(),
+        // Include checks count for analytics
+        metadata: {
+          unsuccessfulChecks: checks + (isCorrect ? 0 : 1)
+        }
       }
     ];
 
     onComplete('predict', [selectedIndex], responses);
     onProgressUpdate?.('predict', 'completed', timeSpent);
+    
+    // Track unsuccessful attempts (low plausibility score)
+    if (!isCorrect) {
+      setChecks((c) => c + 1);
+    }
+    
+    // Show congratulations popup after a brief delay
+    setTimeout(() => {
+      setShowCongratulations(true);
+    }, 1000);
   }, [disabled, selectedIndex, startTime, content, onComplete, onProgressUpdate]);
 
   const isCompleted = progress?.status === 'completed';
@@ -139,140 +144,107 @@ const PredictActivityEnhanced: React.FC<PredictActivityEnhancedProps> = ({
 
   const getOptionClasses = (index: number) => {
     const selected = selectedIndex === index;
-    if (selected && feedback) {
-      return feedback.isCorrect ? 'border-green-500 bg-green-50' : 'border-yellow-500 bg-yellow-50';
+    if (selected) {
+      return 'border-blue-500 bg-blue-50';
     }
     return 'border-gray-200 bg-white hover:border-gray-300';
   };
 
-  const plausibilityColor = (score: number) => {
-    if (score >= 8) return 'bg-green-100 text-green-800';
-    if (score >= 5) return 'bg-yellow-100 text-yellow-800';
-    return 'bg-gray-100 text-gray-700';
-  };
-
   return (
-    <div className={`space-y-6 ${className}`}>
-      {/* Activity Header */}
+    <div className={`space-y-4 ${className}`}>
+      {/* Question header */}
+      <div>
+        <h2 className="text-lg font-semibold text-gray-900">{content.content.question}</h2>
+      </div>
+
+      {/* Blue instruction box */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <div className="flex items-start">
-          <svg className="w-5 h-5 text-blue-600 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-          </svg>
-          <div>
-            <h4 className="text-sm font-medium text-blue-900 mb-1">How to complete this activity:</h4>
-            <ul className="text-sm text-blue-800 space-y-1">
-              <li>• {interactionPattern.primaryInteraction === 'tap' ? 'Tap' : 'Click'} on the prediction you think is most likely</li>
-              <li>• Consider clues from the story to guide your choice</li>
-              <li>• Plausibility is shown from 1 (low) to 10 (high)</li>
-            </ul>
-          </div>
-        </div>
+        <p className="text-sm text-blue-900">
+          {interactionPattern.primaryInteraction === 'tap' ? 'Tap' : 'Click'} on the prediction you think is most likely. Consider clues from the story to guide your choice.
+        </p>
       </div>
-
-      {/* Question */}
-      <div className="text-center">
-        <h3 className="text-xl font-semibold text-gray-900 mb-2">{content.content.question}</h3>
-        <p className="text-gray-600">{content.content.instructions}</p>
-      </div>
-
-      {/* Immediate Feedback */}
-      {showFeedback && feedback && (
-        <div className={`border rounded-lg p-4 transition-all duration-300 ${feedback.isCorrect ? 'border-green-200 bg-green-50 text-green-800' : 'border-yellow-200 bg-yellow-50 text-yellow-800'}`} role="status" aria-live="polite">
-          <div className="flex items-start">
-            <svg className={`w-5 h-5 mr-3 mt-0.5 flex-shrink-0 ${feedback.isCorrect ? 'text-green-600' : 'text-yellow-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              {feedback.isCorrect ? (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-              ) : (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
-              )}
-            </svg>
-            <div>
-              <p className="font-medium">{feedback.feedback}</p>
-              {feedback.suggestions && feedback.suggestions.length > 0 && (
-                <ul className="mt-2 text-sm space-y-1">
-                  {feedback.suggestions.map((s, i) => (
-                    <li key={i}>• {s}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Options */}
       <div className="space-y-3">
-        <h4 className="text-lg font-semibold text-gray-900">Choose the most likely prediction:</h4>
         <div className="grid gap-3">
           {content.content.options.map((opt, index) => (
-            <div
-              key={index}
-              className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 focus-ring ${getOptionClasses(index)} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-              role="button"
-              tabIndex={disabled ? -1 : 0}
-              aria-pressed={selectedIndex === index}
-              aria-label={`Prediction ${index + 1}: ${opt.text}`}
-              onClick={() => handleSelect(index)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  handleSelect(index);
-                }
-              }}
-            >
-              <div className="flex items-start justify-between">
-                <p className="text-gray-800 leading-relaxed pr-3">{opt.text}</p>
-                <span className={`ml-3 px-2 py-1 text-xs rounded-full whitespace-nowrap ${plausibilityColor(opt.plausibilityScore)}`} aria-label={`Plausibility ${opt.plausibilityScore} of 10`}>
-                  {opt.plausibilityScore}/10
-                </span>
+            <div key={index}>
+              <div
+                className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 focus-ring ${getOptionClasses(index)} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                role="button"
+                tabIndex={disabled ? -1 : 0}
+                aria-pressed={selectedIndex === index}
+                aria-label={`Prediction ${index + 1}: ${opt.text}`}
+                onClick={() => handleSelect(index)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleSelect(index);
+                  }
+                }}
+              >
+                <p className="text-gray-800 leading-relaxed">{opt.text}</p>
               </div>
+              
+              {/* Reasoning appears under selected option */}
+              {selectedIndex === index && (
+                <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-start">
+                    <svg className="w-4 h-4 text-blue-600 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <div>
+                      <p className="text-sm font-medium text-blue-900 mb-1">Reasoning:</p>
+                      <p className="text-sm text-blue-800">{opt.feedback}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
       </div>
 
       {/* Actions */}
-      <div className="flex items-center justify-between pt-2">
-        {onJumpToContext && (
-          <button
-            onClick={() => onJumpToContext('predict-context')}
-            className="inline-flex items-center px-3 py-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors focus-ring"
-            aria-label="Jump to story context for predictions"
-          >
-            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
-            </svg>
-            Find in Story
-          </button>
-        )}
-
-        {!isCompleted && (
+      {selectedIndex !== null && !isCompleted && (
+        <div className="flex justify-end pt-2">
           <button
             onClick={handleComplete}
-            disabled={!canComplete || disabled}
-            className={`px-6 py-2 rounded-lg font-medium transition-colors focus-ring ${
-              canComplete && !disabled ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-            }`}
-            aria-label="Complete activity"
+            className="rounded-lg px-4 py-2 text-sm font-semibold shadow-sm text-white bg-green-600 hover:bg-green-700"
           >
-            Complete Activity
+            Next
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Final Feedback */}
-      {isCompleted && feedback && (
-        <div className="text-center py-4">
-          <div className={`inline-flex items-center px-4 py-2 rounded-full ${feedback.isCorrect ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              {feedback.isCorrect ? (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-              ) : (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
-              )}
-            </svg>
-            {feedback.isCorrect ? 'Activity completed!' : 'Activity completed with feedback'}
+
+      {/* Congratulations Popup */}
+      {showCongratulations && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-8 max-w-md mx-4 text-center shadow-xl">
+            {/* Confetti Animation */}
+            <div className="mb-6">
+              <div className="text-6xl mb-2">🎉</div>
+            </div>
+            
+            {/* Message */}
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">
+              Congratulations!
+            </h2>
+            <p className="text-gray-600 mb-6">
+              You've completed all the activities for Chapter {dayIndex}!
+            </p>
+            
+            {/* Button */}
+            <button
+              onClick={() => {
+                // Navigate to plan overview page
+                window.location.href = `/plan3/${planId || ''}`;
+              }}
+              className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+            >
+              {dayIndex < 3 ? `Unlock Chapter ${dayIndex + 1}` : 'View Plan Overview'}
+            </button>
           </div>
         </div>
       )}

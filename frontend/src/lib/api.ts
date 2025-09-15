@@ -50,6 +50,14 @@ export const createAssessment = async (studentId: number) => {
   return response.data;
 };
 
+export const saveReadingProgress = async (assessmentId: string, readingTime: number, errorCount: number) => {
+  const response = await api.put(`/assessments/${assessmentId}/reading`, {
+    readingTime,
+    errorCount
+  });
+  return response.data;
+};
+
 export const deleteStudent = async (studentId: number) => {
   const response = await api.delete(`/students/${studentId}`);
   return response.data;
@@ -135,6 +143,11 @@ export const getPlan3DayDetails = async (planId: string, dayIndex: number): Prom
 
 export const deleteCurrentPlanForStudent = async (studentId: number) => {
   const response = await api.delete(`/plans/student/${studentId}`);
+  return response.data;
+};
+
+export const deleteCurrentPlan3ForStudent = async (studentId: number) => {
+  const response = await api.delete(`/plan3/student/${studentId}`);
   return response.data;
 };
 
@@ -375,50 +388,54 @@ export const savePlan3Answers = async (planId: string, dayIndex: number, answers
   return response.data;
 };
 
-export const pollPlan3Status = async (studentId: number, maxAttempts: number = 30): Promise<any> => {
+export const pollPlan3Status = async (studentId: number, maxAttempts: number = 45): Promise<any> => {
   let attempts = 0;
   const baseDelay = 1000; // Start with 1 second
-  
+
   while (attempts < maxAttempts) {
     try {
-      const plan = await getPlanByStudentId(studentId);
-      
-      if (!plan) {
+      const planResponse = await getPlanByStudentId(studentId);
+
+      // Backend returns { plan: {...} } when found; normalize here
+      const resolvedPlan = (planResponse as any)?.plan ?? planResponse;
+
+      if (!resolvedPlan) {
         // Plan doesn't exist yet, wait a bit longer
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise((resolve) => setTimeout(resolve, 2000));
         attempts++;
         continue;
       }
-      
-      if (plan.status === 'active') {
-        return plan; // Plan is ready
+
+      const status: string | undefined = (resolvedPlan as any)?.status;
+
+      if (status === 'active' || status === 'completed') {
+        return resolvedPlan; // Plan is ready
       }
-      
-      if (plan.status === 'failed') {
+
+      if (status === 'failed') {
         throw new Error('Plan generation failed');
       }
-      
+
       // Plan is still generating, wait and try again
       const delay = Math.min(baseDelay * Math.pow(1.5, attempts), 5000); // Exponential backoff, max 5 seconds
-      await new Promise(resolve => setTimeout(resolve, delay));
+      await new Promise((resolve) => setTimeout(resolve, delay));
       attempts++;
-      
     } catch (error: any) {
-      console.warn(`Poll attempt ${attempts + 1} failed:`, error.message);
-      
+      console.warn(`Poll attempt ${attempts + 1} failed:`, error?.message || error);
+
       // If it's a network error, wait and retry
-      if (error.code === 'NETWORK_ERROR' || error.code === 'ECONNRESET') {
-        await new Promise(resolve => setTimeout(resolve, 3000));
+      if (error?.code === 'NETWORK_ERROR' || error?.code === 'ECONNRESET') {
+        await new Promise((resolve) => setTimeout(resolve, 3000));
         attempts++;
         continue;
       }
-      
+
       // For other errors, throw immediately
       throw error;
     }
   }
-  
-  throw new Error('Plan generation timed out after 30 attempts');
+
+  throw new Error(`Plan generation timed out after ${maxAttempts} attempts`);
 };
 
 export default api;

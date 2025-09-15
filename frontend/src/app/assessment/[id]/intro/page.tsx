@@ -33,9 +33,11 @@ export default function AssessmentIntroPage() {
     }
   }, [params.id]);
 
-  const handleStart = () => {
+  // Traditional flow removed per request – only combined view remains
+
+  const handleStartCombined = () => {
     if (assessment) {
-      router.push(`/assessment/${assessment.id}/read`);
+      router.push(`/assessment/${assessment.id}/combined`);
     }
   };
 
@@ -143,19 +145,21 @@ export default function AssessmentIntroPage() {
               <li>• The assessment takes about 5-10 minutes to complete</li>
             </ul>
           </div>
+
+          {/* Primary action moved here since there is only one flow */}
+          <div className="mt-8 text-center">
+            <button
+              onClick={handleStartCombined}
+              className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Start Assessment
+            </button>
+          </div>
         </div>
 
-        <div className="text-center">
-          <button
-            onClick={handleStart}
-            className="px-8 py-4 bg-blue-600 text-white text-lg rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Start Reading Assessment
-          </button>
-          <p className="mt-4 text-gray-600">
-            You can always come back to this later if you&apos;re not ready right now.
-          </p>
-        </div>
+        <p className="text-center text-gray-600">
+          You can always come back to this later if you&apos;re not ready right now.
+        </p>
       </div>
     </div>
   );

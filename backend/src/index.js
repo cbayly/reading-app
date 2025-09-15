@@ -40,9 +40,9 @@ async function testDatabaseConnection() {
     
     // Check what tables exist
     const tables = await prisma.$queryRaw`
-      SELECT name FROM sqlite_master 
-      WHERE type='table' AND name NOT LIKE 'sqlite_%'
-      ORDER BY name;
+      SELECT table_name as name FROM information_schema.tables 
+      WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+      ORDER BY table_name;
     `;
     console.log('📋 Available tables:', tables.map(t => t.name));
     
@@ -72,7 +72,14 @@ async function testDatabaseConnection() {
 testDatabaseConnection();
 
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:3001', 'http://127.0.0.1:3000'],
+  origin: [
+    'http://localhost:3000', 
+    'http://localhost:3001', 
+    'http://127.0.0.1:3000',
+    'https://reading-app-nine.vercel.app',
+    'https://reading-app-git-main-cams-projects-c23d39a8.vercel.app',
+    'https://reading-oxtggsrc4-cams-projects-c23d39a8.vercel.app'
+  ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],

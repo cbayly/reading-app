@@ -198,7 +198,7 @@ export default function ReadingPanel({ day, story, isReadOnly = false }: Reading
               {/* Chapter Content */}
               {(!isDay4 || isExpanded) && (
                 <div className="p-4 border-t">
-                  <div className="prose prose-sm max-w-none">
+                  <div className="prose prose-sm max-w-none no-hyphens">
                     <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">
                       {chapter.content}
                     </div>

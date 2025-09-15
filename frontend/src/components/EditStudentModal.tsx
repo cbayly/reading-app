@@ -44,7 +44,21 @@ export default function EditStudentModal({
         birthday: student.birthday
       });
     }
+    // Reset delete confirmation whenever switching students
+    setShowDeleteConfirm(false);
   }, [student]);
+
+  // Ensure the delete confirmation is closed whenever the modal opens/closes
+  React.useEffect(() => {
+    if (!isOpen) {
+      setShowDeleteConfirm(false);
+    }
+  }, [isOpen]);
+
+  const handleClose = () => {
+    setShowDeleteConfirm(false);
+    onClose();
+  };
 
   const handleInputChange = (field: keyof Student, value: string | number) => {
     setFormData(prev => ({
@@ -86,7 +100,7 @@ export default function EditStudentModal({
             Edit Student
           </h2>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -138,7 +152,7 @@ export default function EditStudentModal({
           <div className="flex space-x-3">
             <Button
               variant="secondary"
-              onClick={onClose}
+              onClick={handleClose}
               className="flex-1"
               disabled={isSaving || isDeleting}
             >

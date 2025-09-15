@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import { Assessment } from '@/types/assessment';
-import PassageReader from '@/components/PassageReader';
+import GenericSplitLayout from '@/components/layout/GenericSplitLayout';
+import AssessmentReadingPane from '@/components/assessment/AssessmentReadingPane';
 
 export default function AssessmentReadPage() {
   const params = useParams();
@@ -36,14 +37,18 @@ export default function AssessmentReadPage() {
 
   const handleReadingComplete = (readingTime: number, errorCount: number) => {
     if (assessment) {
+      // Save to localStorage as backup in case URL params get lost
+      localStorage.setItem(`assessment_${assessment.id}_readingTime`, readingTime.toString());
+      localStorage.setItem(`assessment_${assessment.id}_errorCount`, errorCount.toString());
+      
       router.push(
         `/assessment/${assessment.id}/questions?readingTime=${readingTime}&errorCount=${errorCount}`
       );
     }
   };
 
-  const handlePrint = () => {
-    window.print();
+  const handleBack = () => {
+    router.push('/dashboard');
   };
 
   if (loading) {
@@ -91,51 +96,49 @@ export default function AssessmentReadPage() {
     );
   }
 
-  const firstName = assessment?.student?.name?.split(' ')[0] || assessment?.student?.name;
+  const firstName = assessment?.student?.name?.split(' ')[0] || assessment?.student?.name || 'Student';
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-4xl mx-auto px-4 py-4">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">
-                Reading Assessment
-              </h1>
-              <p className="text-gray-600">
-                {firstName}&apos;s Reading Test
-              </p>
-            </div>
-            <button
-              onClick={handlePrint}
-              className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium flex items-center gap-2 no-print"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clipRule="evenodd" />
+    <GenericSplitLayout
+      readingContent={
+        <AssessmentReadingPane
+          passage={assessment.passage}
+          studentName={firstName}
+          onComplete={handleReadingComplete}
+          showCompleteButton={true}
+        />
+      }
+      activityContent={
+        <div className="h-full flex items-center justify-center p-6">
+          <div className="text-center max-w-md">
+            <div className="mb-4">
+              <svg className="w-16 h-16 text-gray-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-              Print Assessment
-            </button>
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              Complete the Reading First
+            </h3>
+            <p className="text-gray-600 text-sm">
+              Please read the passage completely before answering the questions. This helps ensure accurate assessment of {firstName}'s reading comprehension.
+            </p>
           </div>
         </div>
-      </div>
-
-      {/* Reading Content */}
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="bg-white rounded-lg shadow-sm border p-8">
-          <div className="mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">
-              {firstName}&apos;s Reading Passage
-            </h2>
-          </div>
-
-          <PassageReader
-            passage={assessment.passage}
-            studentName={firstName}
-            onComplete={handleReadingComplete}
-          />
-        </div>
-      </div>
-    </div>
+      }
+      title="Reading Assessment"
+      subtitle={firstName}
+      onBack={handleBack}
+      defaultView="reading"
+      printConfig={{
+        readingPrintable: true,
+        activitiesPrintable: false
+      }}
+      splitConfig={{
+        defaultSplitValue: 0.7, // Give more space to reading
+        minLeftWidth: 500,
+        minRightWidth: 300,
+        showDivider: true
+      }}
+    />
   );
 } 
