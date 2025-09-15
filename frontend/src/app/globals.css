@@ -1,22 +1,15 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 :root {
   --font-geist-sans: ui-sans-serif, system-ui, sans-serif;
   --font-geist-mono: ui-monospace, monospace;
 }
 
-@theme inline {
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
 body {
   font-family: var(--font-geist-sans);
 }
-
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
 
 /* Prevent autofill overlay errors by hiding problematic autofill dropdowns */
 [id*="bootstrap-autofill"],
