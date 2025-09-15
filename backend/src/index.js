@@ -38,12 +38,23 @@ async function testDatabaseConnection() {
     await prisma.$connect();
     console.log('✅ Database connection successful');
     
-    // Check what tables exist
-    const tables = await prisma.$queryRaw`
-      SELECT table_name as name FROM information_schema.tables 
-      WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
-      ORDER BY table_name;
-    `;
+    // Check what tables exist (different queries for SQLite vs PostgreSQL)
+    let tables;
+    if (process.env.DATABASE_URL?.startsWith('file:')) {
+      // SQLite
+      tables = await prisma.$queryRaw`
+        SELECT name FROM sqlite_master 
+        WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
+        ORDER BY name;
+      `;
+    } else {
+      // PostgreSQL
+      tables = await prisma.$queryRaw`
+        SELECT table_name as name FROM information_schema.tables 
+        WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+        ORDER BY table_name;
+      `;
+    }
     console.log('📋 Available tables:', tables.map(t => t.name));
     
     // Check specific tables we need
