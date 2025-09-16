@@ -132,3 +132,6 @@ process.on('SIGINT', async () => {
   await prisma.$disconnect();
   process.exit(0);
 });
+
+// Export the Express app for production startup
+export default app;
