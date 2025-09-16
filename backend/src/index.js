@@ -57,10 +57,10 @@ async function testDatabaseConnection() {
     }
     console.log('📋 Available tables:', tables.map(t => t.name));
     
-    // Check specific tables we need
-    const hasPlans = tables.some(t => t.name === 'plans');
-    const hasPlan3s = tables.some(t => t.name === 'plan3s');
-    const hasStudents = tables.some(t => t.name === 'students');
+    // Check specific tables we need (using actual table names from database)
+    const hasPlans = tables.some(t => t.name === 'Plan');
+    const hasPlan3s = tables.some(t => t.name === 'Plan3');
+    const hasStudents = tables.some(t => t.name === 'Student');
     
     console.log('🔍 Schema Check:');
     console.log('  - plans table exists:', hasPlans);
