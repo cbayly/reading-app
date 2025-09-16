@@ -82,38 +82,18 @@ async function testDatabaseConnection() {
 // Run database test on startup
 testDatabaseConnection();
 
-// Enhanced CORS configuration with debugging
 app.use(cors({
-  origin: function (origin, callback) {
-    const allowedOrigins = [
-      'http://localhost:3000', 
-      'http://localhost:3001', 
-      'http://127.0.0.1:3000',
-      'https://reading-app-nine.vercel.app',
-      'https://reading-app-git-main-cams-projects-c23d39a8.vercel.app',
-      'https://reading-oxtggsrc4-cams-projects-c23d39a8.vercel.app'
-    ];
-    
-    console.log('🌐 CORS Request from origin:', origin);
-    
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) {
-      console.log('✅ CORS: Allowing request with no origin');
-      return callback(null, true);
-    }
-    
-    if (allowedOrigins.includes(origin)) {
-      console.log('✅ CORS: Allowing origin:', origin);
-      return callback(null, true);
-    } else {
-      console.log('❌ CORS: Blocking origin:', origin);
-      return callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: [
+    'http://localhost:3000', 
+    'http://localhost:3001', 
+    'http://127.0.0.1:3000',
+    'https://reading-app-nine.vercel.app',
+    'https://reading-app-git-main-cams-projects-c23d39a8.vercel.app',
+    'https://reading-oxtggsrc4-cams-projects-c23d39a8.vercel.app'
+  ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  optionsSuccessStatus: 200 // Some legacy browsers choke on 204
 }));
 app.use(express.json());
 
@@ -126,16 +106,6 @@ app.use((req, res, next) => {
 app.get("/", (req, res) => {
   console.log("✅ Root route hit");
   res.send("Reading App Backend is running!");
-});
-
-// Handle preflight OPTIONS requests explicitly
-app.options('*', (req, res) => {
-  console.log('🔄 OPTIONS preflight request for:', req.path);
-  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.sendStatus(200);
 });
 
 // Public routes
